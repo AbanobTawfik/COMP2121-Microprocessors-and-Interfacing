@@ -64,25 +64,11 @@ bubbleswapalgorithm:
 
 	dec size			;1 less element to sort 
 	cpi size, 0			;checks if anymore elements left to compare, if so continue if no more aka = 0 end program
-	breq checksorted
+	breq halt
 	ldi curr, 0
 	ldi YL, low(resultArray)
     ldi YH, high(resultArray)	;now we go through the whole array again to check if its all sorted, so reset counter and reset our Y pointer and repeat sort till condition met no element to sort
 	rjmp bubblesort
-
-
-
-checksorted:
-ldi YL, low(resultArray)
-ldi YH, high(resultArray)
-	ld r16, y+
-	ld r17, y+
-	ld r18, y+
-	ld r19, y+
-	ld r20, y+
-	ld r21, y+
-	ld r22, y+
-	ld r23, y+
 
 halt:
 	rjmp halt
