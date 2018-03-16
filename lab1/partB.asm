@@ -1,7 +1,6 @@
 .include "m2560def.inc"
 ; this program will add two arrays and store the result in arrayret
 .dseg
-.org 0x200
 
 arrayret: .byte 5
 .cseg
@@ -38,8 +37,8 @@ addition:
 	add a5, b5
 
 returnarray:
-	ldi r26, low(arrayret)
-	ldi r27, high(arrayret)
+	ldi XL, low(arrayret)
+	ldi XH, high(arrayret)
 	st X+, a1
 	st X+, a2
 	st X+, a3
