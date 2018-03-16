@@ -7,32 +7,29 @@
 .def size = r17			;loop counter
 
 .dseg 
-.org 0x200		;start code at starf of SRAM
+resultArray:
+	.byte 7		;start code at starf of SRAM
 
 .cseg
-ldi r28, low(0x200)			;storing our Y pointer at start of SRAM
-ldi r29, high(0x200)
+sortingArray:
+	.db 7,4,5,1,6,3,2
+
+
+ldi ZL, low(sortingArray<<1)			;storing our Y pointer at start of SRAM
+ldi ZH, high(sortingArray<<1)
 ;putting array into memory SRAM
 
-ldi curr, 7
-st y+, curr
-ldi curr, 4
-st y+, curr
-ldi curr, 5
-st y+, curr
-ldi curr, 1
-st y+, curr
-ldi curr, 6
-st y+, curr
-ldi curr, 3
-st y+, curr
-ldi curr, 2
-st y+, curr
+ldi YL, low(resultArray)
+ldi YH, high(resultArray)
 
-;now that all values are stores into sram reset pointer to start of values so we pointing to 7
-ldi r28, low(0x200)
-ldi r29, high(0x200)
+moveIntoMemory:
+	lpm curr, Z+
+	st Y+, curr
+	cpi curr, 0
+	brne moveIntoMemory
 
+ldi YL, low(resultArray)
+ldi YH, high(resultArray)
 ldi curr, 0				;current index	= 0
 ldi size, 6				;size of array = 6
 
@@ -69,15 +66,15 @@ bubbleswapalgorithm:
 	cpi size, 0			;checks if anymore elements left to compare, if so continue if no more aka = 0 end program
 	breq checksorted
 	ldi curr, 0
-	ldi r28, low(0x200)
-	ldi r29, high(0x200)	;now we go through the whole array again to check if its all sorted, so reset counter and reset our Y pointer and repeat sort till condition met no element to sort
+	ldi YL, low(resultArray)
+    ldi YH, high(resultArray)	;now we go through the whole array again to check if its all sorted, so reset counter and reset our Y pointer and repeat sort till condition met no element to sort
 	rjmp bubblesort
 
 
 
 checksorted:
-	ldi r28, low(0x200)
-	ldi r29, high(0x200)
+ldi YL, low(resultArray)
+ldi YH, high(resultArray)
 	ld r16, y+
 	ld r17, y+
 	ld r18, y+
