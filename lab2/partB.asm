@@ -41,8 +41,8 @@ push r18
 
 halt:
 rjmp halt
-checkalpha:
 
+checkalpha:
 ;(if((r17>'A' && r17 <'Z') || (r17 > 'a' && r17 < 'z')
 
 checkCharacters:
