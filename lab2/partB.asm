@@ -61,13 +61,13 @@ rjmp checkCharacters
 
 checkupperz:
 ldi r18, Z
-cp r17, r18
+cp r18, r17
 brlt checkCharacters
 rjmp endOfFunctionFail
 
 checklowerz:
 ldi r18, z
-cp r17, r18
+cp r18, r17
 brlt checkCharacters
 rjmp endOfFunctionFail
 
