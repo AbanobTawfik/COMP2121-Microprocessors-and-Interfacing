@@ -32,9 +32,6 @@ call checkalpha
 mov r21, r16
 ; r21 should be 0
 
-halt:
-rjmp halt
-checkalpha:
 
 push ZL
 push ZH
@@ -42,8 +39,9 @@ push r16
 push r17
 push r18
 
-;lets assume that it is true, unless 1 character is invalid so lets set our return register to true
-ldi r16, 1
+halt:
+rjmp halt
+checkalpha:
 
 ;(if((r17>'A' && r17 <'Z') || (r17 > 'a' && r17 < 'z')
 
