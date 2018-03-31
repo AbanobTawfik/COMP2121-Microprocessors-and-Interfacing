@@ -1,4 +1,7 @@
 .include "m2560def.inc"
+.dseg
+stringStore:
+	.byte 50
 
 .cseg
 myString1: .db "AB",0,0
@@ -16,7 +19,6 @@ ldi ZH, high(myString1 << 1)
 ;load Function into Y
 ldi YL, low(isUPPER)
 ldi YH, high(isUPPER)
-    
 call checkString
 mov r19, r16
 
@@ -44,23 +46,31 @@ ldi YH, high(isDIGIT)
 mov r22, r16
 
 checkString:
+clr XL
+clr XH
+ldi XL, low(stringStore)
+ldi XH, high(stringStore)
 ;epilogue, pushing values + return address onto stack
-push ZL
-push ZH
-push YL
-push YH
-push r0
+loadStringToDataMemory:
+lpm r17, Z+
+st X+, r17
+cpi r17, 0
+brne loadStringToDataMemory
 
+clr ZL
+clr ZH
+mov ZL, YL
+mov ZH, YH
+
+icall
 ret
 
-;call the function stored in the Y pointer still has parameter Z unchanged
-;now we have return restore stack to original state and return
-
-
 isUPPER:
-;now we want to check value
+ldi XL, low(stringStore)
+ldi XH, high(stringStore)
 checkCharacters:
-lpm r17, z+
+
+ld r17, X+
 cpi r17, 0
 breq endSuccess
 ;load A into r18
@@ -76,9 +86,11 @@ brlt endFail
 rjmp checkCharacters
 
 isDigit:
+ldi XL, low(stringStore)
+ldi XH, high(stringStore)
 ;now we want to check value
 checkDigit:
-lpm r17, z+
+ld r17, X+
 cpi r17, 0
 breq endSuccess
 ;load A into r18
@@ -95,20 +107,19 @@ rjmp checkDigit
 
 endSuccess:
 ldi r16, 1
-;restore the stack
-pop r0
-pop YH
-pop YL
-pop ZH
-pop ZL
+;return
+ldi XL, low(stringStore)
+ldi XH, high(stringStore)
+clr XL
+clr XH
 ret
 
 endFail:
 ldi r16, 0
-;restore stack
-pop r0
-pop YH
-pop YL
-pop ZH
-pop ZL
+;return
+ld XL, low(stringStore)
+ld XH, high(stringStore)
+clr XL
+clr XH
+
 ret
