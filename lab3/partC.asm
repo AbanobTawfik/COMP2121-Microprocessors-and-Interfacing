@@ -21,3 +21,12 @@ queuedPattern:
 
 .tempCounter
 	.byte 1
+
+;this will clear a word in memory at the address the label was located
+.macro clear
+	ldi YL, low(@0)	
+	ldi YH, high(@0)
+	clr temp
+	st Y+, temp		;we clear the two bytes located where the label @a0 is by loading in a clear byte
+	st Y, temp
+.endmacro
