@@ -93,6 +93,13 @@ Timer0OVF:
 	;otherwise jmp to epliogue 
 	jmp timerEpliogue
 
+
+
+NotSecond:
+	sts TempCounter, r24		;update the value of the temporary counter
+	sts TempCounter+1, r25	
+	jmp TimerEpilogue
+
 flahOff:
 	ldi r16, 0xFF
 	out DDRc, r16    ;set portC as output
@@ -112,6 +119,7 @@ flashOn:
 	ldi temp, 0x00
 	sts enableLights, temp
 	jmp timerEpilogue
+notSecond:
 
 timerEpilogue:
 	;epilogue
@@ -123,6 +131,11 @@ timerEpilogue:
 	;restore our SREG especially xD
 	out SREG, temp
 	reti	
+
+PB1_ON_PRESS:
+	
+
+PB0_ON_PRESS
 
 main:
 ;we want to load our pattern into the data memory 
@@ -140,6 +153,8 @@ main:
 	out TCCR0B, temp				; prescalining = 8
 	ldi temp, 1<<TOIE0				; 128 microseconds
 	sts TIMSK0, temp				; T/C0 interrupt enable
+	;enable the interrupt for INT0 INT1 based on falling edges of PB1 and PB2
+
 	sei
 
 loop: rjmp loop ; loop 
