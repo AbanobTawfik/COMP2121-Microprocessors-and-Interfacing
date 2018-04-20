@@ -39,6 +39,7 @@ numberOfFlashes:
 	.byte 1
 numberOfBitsInPattern:
 	.byte 1
+
 ;from table
 ;PORT D RDX3 INPUTS PB1
 ;PORT D RDX4 INPUTS PB0
@@ -100,9 +101,10 @@ NotSecond:
 	sts TempCounter+1, r25	
 	jmp TimerEpilogue
 
-flahOff:
-	ldi r16, 0xFF
-	out DDRc, r16    ;set portC as output
+flashOff:
+	sts numberOfFlashes, temp
+	ldi temp, 0xFF
+	out DDRc, temp    ;set portC as output
 	ldi leds, 0x00   ;set led as off pattern
 	out portC, r16
 	;set the enable lights to flash on now
@@ -111,7 +113,12 @@ flahOff:
 	jmp timerEpilogue
 
 flashOn:
-	ldi r16, 0xFF
+;increment number of flashes
+	lds temp, numberOFFlashes
+	inc temp
+	sts numberOfFlashes, temp	
+	;load pattern onto screen
+	ldi temp, 0xFF
 	out DDRc, r16    ;set portC as output
 	lds temp, currentPattern
 	out portC, temp
@@ -133,8 +140,47 @@ timerEpilogue:
 	reti	
 
 PB1_ON_PRESS:
-	
+;  PROLOGUE
+	in temp, SREG
+	push temp
+	push YH
+	push YL
+	push r25
+	push r24
+	lds temp, numberOfPatternsQueued
+	cpi temp, 1
+	brgt updateCurrentPattern
+	jmp updateNextPattern
 
+updateCurrentPattern:
+	lds temp, numberOfBitsInPattern
+	cpi temp, 8
+	breq pb1epilogue
+
+updateNextPattern:
+`	
+pb1epilogue:
+
+
+;this interrupt handler which is debounced will 
+	lds temp, numberOfBitsInPattern
+	cpi temp, 8						;if there are 8 bits in the pattern already we want to stop loading into next pattern
+	breq pb1Epilogue				;since conditional branches are relative making new one avoids error in jumps too far
+	;pb1 should put ON the switch, since pattern entered top to bottom
+	;load currentPattern
+	;want to shift it to the right by 1
+	;and put the first bit as ON == 1
+
+pb1Epilogue:
+	;epilogue
+	pop r24
+	pop r25
+	pop YL
+	pop YH
+	pop temp
+	;restore our SREG especially xD
+	out SREG, temp
+	reti	
 PB0_ON_PRESS
 
 main:
