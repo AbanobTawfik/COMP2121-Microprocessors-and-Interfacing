@@ -12,7 +12,7 @@
 ; Replace with your application code
 .include "m2560def.inc"
 ;simulate the an on off pattern, which this code should appear lights r shifting to the right or left
-.equ pattern = 0b1010101010101010
+.equ pattern = 0b111111110000000
 .def temp = r16
 .def leds = r17
 
@@ -163,8 +163,7 @@ main:
 	clear tempCounter
 	clear secondCounter
 
-	ldi temp, 0b00000000
-	out TCCR0A, temp
+
 	ldi temp, 0b00000010
 	out TCCR0B, temp				; prescalining = 8
 	ldi temp, 1<<TOIE0				; 128 microseconds
