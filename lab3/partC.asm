@@ -45,6 +45,8 @@ numberOfBitsInPattern:
 	.byte 1
 firstPattern:
 	.byte 1
+patternReady:
+	.byte 1
 ;from table
 ;PORT D RDX3 INPUTS PB1
 ;PORT D RDX4 INPUTS PB0
@@ -122,7 +124,16 @@ debounceStatusSkip:
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
 	breq waitForNextPatterncheck1
+	lds temp, firstPattern
+	cpi temp, 0
+	breq waitForNextPatterncheck1
 	;IF A SECOND HAS PASSED
+
+	lds temp, patternReady
+	cpi temp, 0xff
+	breq showPattern
+	jmp timerEpilogue
+showPattern:
 	lds temp, enableLights
 	cpi temp, 0x00			;turn off the lights
 	breq flashOff
@@ -133,6 +144,9 @@ debounceStatusSkip:
 waitForNextPatterncheck1:
 	lds temp, firstPattern
 	cpi temp, 0
+	breq setCurrentPattern
+	lds temp, numberOfBitsInPattern
+	cpi temp, 8
 	breq setCurrentPattern
 	lds temp, numberOfFlashes
 	cpi temp, 6
@@ -149,7 +163,7 @@ flashOff:
 	inc temp
 	sts numberOfFlashes, temp
 	ldi leds, 0x00   ;set led as off pattern
-	out PORTC, r16
+	out PORTC, leds
 	;set the enable lights to flash on now
 	ldi temp, 0xFF
 	sts enableLights, temp
@@ -179,12 +193,7 @@ setCurrentPattern:
 	sts firstPattern,temp
 	lds temp, nextPattern
 	sts patternState, temp
-	lds temp, enableLights
-	cpi temp, 0x00			;turn off the lights
-	breq flashOff
-	;otherwise 
-	cpi temp, 0xFF			;turn on the lights
-	breq flashOn
+
 
 timerEpilogue:
 	;epilogue
@@ -206,6 +215,7 @@ PB1_ON_PRESS:
 	push r25
 	push r24
 	;want to debounce around 10ms 
+
 	lds temp, debounceRightStatus
 	cpi temp, 1
 	brne pb1epilogue				;the status will be on 10ms after button is pressed
@@ -219,6 +229,7 @@ PB1_ON_PRESS:
 	lsl temp
 	inc temp
 	sts nextPattern, temp
+	out PORTC, temp
 
 pb1Epilogue:
 	;epilogue
@@ -251,6 +262,7 @@ PB0_ON_PRESS:
 	lds temp, nextPattern
 	lsl temp
 	sts nextPattern, temp
+	out PORTC, temp
 
 pb0Epilogue:
 	;epilogue
