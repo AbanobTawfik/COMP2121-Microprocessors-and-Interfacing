@@ -47,6 +47,8 @@ firstPattern:
 	.byte 1
 patternReady:
 	.byte 1
+displayedPattern:
+	.byte 1
 ;from table
 ;PORT D RDX3 INPUTS PB1
 ;PORT D RDX4 INPUTS PB0
@@ -133,16 +135,17 @@ debounceStatusSkip:
 	ldi r24, 0
 	sts tempCounter, r24
 	sts tempCounter+1, r24
+	
+	ldi leds, 0xFF
+	out portC, leds
+	
 	;now we want to make sure there is a pattern to print if not just end
-
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
 	breq waitForNextPatterncheck1
-	lds temp, firstPattern
-	cpi temp, 0
-	breq waitForNextPatterncheck1
-	;IF A SECOND HAS PASSED
 showPattern:
+	ldi temp, 0xFF
+	sts displayedPattern, temp 
 	lds temp, enableLights
 	cpi temp, 0x00			;turn off the lights
 	breq flashOff
@@ -151,16 +154,12 @@ showPattern:
 	breq flashOn
 
 waitForNextPatterncheck1:
-	lds temp, numberOfBitsInPattern
-	cpi temp, 8
-	breq setCurrentPattern
-	lds temp, numberOfFlashes
+	lds temp, numberOFFlashes
 	cpi temp, 6
-	breq setCurrentPattern
-	lds temp, numberOfFlashes
-	cpi temp, 0
-	breq setCurrentPattern
-	jmp timerEpilogue
+	brlt showPattern
+	
+	jmp setCurrentPattern
+
 
 NotSecond:
 	sts TempCounter, r24		;update the value of the temporary counter
@@ -206,6 +205,8 @@ setCurrentPattern:
 	sts patternState, temp
 	ldi temp, 0
 	sts nextPattern, temp
+	ldi temp, 0x00
+	sts displayedPattern, temp 
 
 timerEpilogue:
 	;epilogue
