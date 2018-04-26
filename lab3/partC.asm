@@ -136,18 +136,14 @@ debounceStatusSkip:
 	ldi r24, 0
 	sts tempCounter, r24
 	sts tempCounter+1, r24
-	
-	lds leds, numberOfBitsInPattern
-	out portC, leds
-	
+		
 	;now we want to make sure there is a pattern to print if not just end
 	lds temp, numberOfBitsInPattern
+	out portC, temp
 	cpi temp, 8
 	breq waitForNextPatterncheck1
-	jmp timerEpilogue
+	jmp showPattern
 showPattern:
-	ldi temp, 0xFF
-	sts displayedPattern, temp 
 	lds temp, enableLights
 	cpi temp, 0x00			;turn off the lights
 	breq flashOff
@@ -157,7 +153,7 @@ showPattern:
 
 waitForNextPatterncheck1:
 	lds temp, numberOFFlashes
-	cpi temp, 6
+	cpi temp, 7
 	brlt showPattern
 	
 	jmp setCurrentPattern
@@ -169,8 +165,6 @@ NotSecond:
 	jmp TimerEpilogue
 
 flashOff:
-	lds leds, numberOfBitsInPattern
-	out portC, leds
 	lds temp, numberOFFlashes
 	inc temp
 	sts numberOfFlashes, temp
@@ -201,14 +195,11 @@ flashOn:
 	jmp timerEpilogue
 
 setCurrentPattern:
-	ldi temp, 0xff
-	sts firstPattern,temp
 	lds temp, nextPattern
 	sts patternState, temp
 	ldi temp, 0
-	sts nextPattern, temp
-	ldi temp, 0x00
-	sts displayedPattern, temp 
+	sts nextPattern, temp 
+	jmp showPattern
 
 timerEpilogue:
 	;epilogue
