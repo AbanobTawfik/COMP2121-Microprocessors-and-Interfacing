@@ -43,7 +43,8 @@ numberOfFlashes:
 	.byte 1
 numberOfBitsInPattern:
 	.byte 1
-
+firstPattern:
+	.byte 1
 ;from table
 ;PORT D RDX3 INPUTS PB1
 ;PORT D RDX4 INPUTS PB0
@@ -90,16 +91,21 @@ Timer0OVF:
 	push YL
 	push r25
 	push r24
-	;button debouncing ~25 ms since 7812 = 1 second, 25 ms = 7812/1000 * 25 
+	;button debouncing ~100 ms since 7812 = 1 second, 25 ms = 7812/1000 * 100 
 	lds r24, debounceTimer
 	lds r25, debounceTimer+1
 	adiw r25:r24, 1
-	cpi r24, low(200)   ;rounding 195 up ^_^
-	ldi temp, high(200)
+	cpi r24, low(800)   ;rounding 800 up ^_^
+	ldi temp, high(800)
 	cpc r25, temp
-	breq debounceStatusOn				;after debouncy has been set to enable debounce statuses
 
+	breq debounceStatusSkip				;after debouncy has been set to enable debounce statuses
 	;now we want to load the value of temporary counter into the register pair r25/r24
+	ldi temp,1
+	sts debounceLeftStatus, temp
+	sts debounceRightStatus, temp
+
+debounceStatusSkip:
 	lds r24, tempCounter
 	lds r25, tempCounter+1
 	adiw r25:r24, 1			;increment the register pair
@@ -107,7 +113,15 @@ Timer0OVF:
 	ldi temp, high(7812)
 	cpc r25, temp
 	brne NotSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	clear tempCounter
+	ldi r24, 0
+	sts tempCounter, r24
+	sts tempCounter+1, r24
 	;now we want to make sure there is a pattern to print if not just end
+
+	lds temp, numberOfBitsInPattern
+	cpi temp, 8
+	breq waitForNextPatterncheck1
 	;IF A SECOND HAS PASSED
 	lds temp, enableLights
 	cpi temp, 0x00			;turn off the lights
@@ -115,32 +129,15 @@ Timer0OVF:
 	;otherwise 
 	cpi temp, 0xFF			;turn on the lights
 	breq flashOn
-	lds temp, numberOFFlashes
-	inc temp
-	sts numberOfFlashes, temp
-	ldi r18, 6
-	cp temp, r18
-	breq waitForNextPattern
-	ldi r18, 0
-	cp temp, r18
-	breq waitForNextPattern
-	;otherwise jmp to epliogue 
+
+waitForNextPatterncheck1:
+	lds temp, firstPattern
+	cpi temp, 0
+	breq setCurrentPattern
+	lds temp, numberOfFlashes
+	cpi temp, 6
+	breq setCurrentPattern
 	jmp timerEpilogue
-
-debounceStatusOn:
-	ldi temp,1
-	sts debounceLeftStatus, temp
-	sts debounceRightStatus, temp
-
-waitForNextPattern:
-	;check if pattern finished display cycle
-	;if it has we want to update our current pattern 
-	clear patternState
-	lds temp, nextPattern
-	sts patternState, temp
-	clear nextPattern
-	clear numberOfBitsInPattern
-	clear numberOfFlashes
 
 NotSecond:
 	sts TempCounter, r24		;update the value of the temporary counter
@@ -151,13 +148,14 @@ flashOff:
 	lds temp, numberOFFlashes
 	inc temp
 	sts numberOfFlashes, temp
-	ldi temp, 0xFF
-	out DDRc, temp    ;set portC as output
 	ldi leds, 0x00   ;set led as off pattern
-	out portC, r16
+	out PORTC, r16
 	;set the enable lights to flash on now
 	ldi temp, 0xFF
 	sts enableLights, temp
+	lds temp, numberOFFlashes
+	inc temp
+	sts numberOfFlashes, temp
 	jmp timerEpilogue
 
 flashOn:
@@ -166,15 +164,27 @@ flashOn:
 	inc temp
 	sts numberOfFlashes, temp
 	;load pattern onto screen
-	ldi temp, 0xFF
-	out DDRc, r16    ;set portC as output
 	lds temp, patternState
 	out portC, temp
 	;set the enable lights to flash on now
 	ldi temp, 0x00
 	sts enableLights, temp
+	lds temp, numberOFFlashes
+	inc temp
+	sts numberOfFlashes, temp
 	jmp timerEpilogue
 
+setCurrentPattern:
+	ldi temp, 0xff
+	sts firstPattern,temp
+	lds temp, nextPattern
+	sts patternState, temp
+	lds temp, enableLights
+	cpi temp, 0x00			;turn off the lights
+	breq flashOff
+	;otherwise 
+	cpi temp, 0xFF			;turn on the lights
+	breq flashOn
 
 timerEpilogue:
 	;epilogue
@@ -199,7 +209,7 @@ PB1_ON_PRESS:
 	lds temp, debounceRightStatus
 	cpi temp, 1
 	brne pb1epilogue				;the status will be on 10ms after button is pressed
-	ldi temp, 0						;now it will be off so after 10ms will be set on again
+	ldi temp, 0						;now it will be off so after 100ms will be set on again
 	sts debounceRightStatus, temp   
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
@@ -256,14 +266,9 @@ pb0Epilogue:
 
 main:
 ;we want to load our pattern into the data memory 
-	ldi r16, high(patternState)
-	sts patternState, r16
-	ldi r16, low(patternState)
-	sts patternState + 1, r16
-	lds leds, patternState
-	out PORTC, leds			;will print the higher bits of the pattern, can do +1 to do other way around
 	clear tempCounter
 	clear secondCounter
+	clear firstPattern
 	ldi temp, 0b00000000
 	out TCCR0A, temp
 	ldi temp, 0b00000010
