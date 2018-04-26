@@ -233,6 +233,8 @@ setCurrentPattern:
 	sts nextPattern, temp
 	sts numberOfFlashes, temp
 	sts numberOfBitsInPattern, temp
+	ldi temp, 1
+	sts displayedPattern, temp
 	jmp showPattern
 
 timerEpilogue:
