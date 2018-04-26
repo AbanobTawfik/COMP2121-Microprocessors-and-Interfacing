@@ -136,14 +136,14 @@ debounceStatusSkip:
 	ldi r24, 0
 	sts tempCounter, r24
 	sts tempCounter+1, r24
-		
+	
 	;now we want to make sure there is a pattern to print if not just end
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
 	breq waitForNextPatterncheck1
 
 	lds temp, numberOfFlashes
-	cpi temp, 6
+	cpi temp, 7
 	brge waitfornextpatterncheck2
 
 	jmp showPattern
@@ -156,6 +156,8 @@ showPattern:
 	breq flashOn
 
 waitForNextPatterncheck1:
+	lds temp, 0
+	sts numberOfBitsInPAttern, temp
 	lds temp, numberOFFlashes
 	cpi temp, 7
 	brlt showPattern
@@ -212,7 +214,6 @@ setCurrentPattern:
 	sts patternState, temp
 	ldi temp, 0
 	sts nextPattern, temp
-	lds temp, 0
 	sts numberOfFlashes, temp 
 	jmp showPattern
 
@@ -236,16 +237,15 @@ PB1_ON_PRESS:
 	push r25
 	push r24
 	;want to debounce around 10ms 
-
 	lds temp, debounceRightStatus
 	cpi temp, 1
 	brne pb1epilogue				;the status will be on 10ms after button is pressed
 	ldi temp, 0						;now it will be off so after 100ms will be set on again
 	sts debounceRightStatus, temp   
 	lds temp, numberOfBitsInPattern
+	cpi temp, 8
 	inc temp
 	sts numberOfBitsInPattern, temp
-	cpi temp, 8
 	breq pb1epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
 	lds temp, nextPattern
@@ -279,9 +279,10 @@ PB0_ON_PRESS:
 	ldi temp, 0						;now it will be off so after 10ms will be set on again
 	sts debounceLeftStatus, temp   
 	lds temp, numberOfBitsInPattern
+
+	cpi temp, 8
 	inc temp
 	sts numberOfBitsInPattern, temp
-	cpi temp, 8
 	breq pb0epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) left shift will cause last bit to be blank
 	lds temp, nextPattern
