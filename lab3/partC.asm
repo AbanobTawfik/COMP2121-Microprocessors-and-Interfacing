@@ -142,11 +142,6 @@ debounceStatusSkip:
 	cpi temp, 0
 	breq waitForNextPatterncheck1
 	;IF A SECOND HAS PASSED
-
-	lds temp, patternReady
-	cpi temp, 0xff
-	breq showPattern
-	jmp timerEpilogue
 showPattern:
 	lds temp, enableLights
 	cpi temp, 0x00			;turn off the lights
@@ -156,14 +151,14 @@ showPattern:
 	breq flashOn
 
 waitForNextPatterncheck1:
-	lds temp, firstPattern
-	cpi temp, 0
-	breq setCurrentPattern
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
 	breq setCurrentPattern
 	lds temp, numberOfFlashes
 	cpi temp, 6
+	breq setCurrentPattern
+	lds temp, numberOfFlashes
+	cpi temp, 0
 	breq setCurrentPattern
 	jmp timerEpilogue
 
@@ -173,6 +168,8 @@ NotSecond:
 	jmp TimerEpilogue
 
 flashOff:
+	lds leds, numberOfBitsInPattern
+	out portC, leds
 	lds temp, numberOFFlashes
 	inc temp
 	sts numberOfFlashes, temp
@@ -207,7 +204,8 @@ setCurrentPattern:
 	sts firstPattern,temp
 	lds temp, nextPattern
 	sts patternState, temp
-
+	ldi temp, 0
+	sts nextPattern, temp
 
 timerEpilogue:
 	;epilogue
@@ -237,7 +235,8 @@ PB1_ON_PRESS:
 	sts debounceRightStatus, temp   
 	lds temp, numberOfBitsInPattern
 	inc temp
-	lds temp, numberOfBitsInPattern
+	sts numberOfBitsInPattern, temp
+	cpi temp, 8
 	breq pb1epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
 	lds temp, nextPattern
@@ -272,14 +271,16 @@ PB0_ON_PRESS:
 	sts debounceLeftStatus, temp   
 	lds temp, numberOfBitsInPattern
 	inc temp
-
-	lds temp, numberOfBitsInPattern
+	sts numberOfBitsInPattern, temp
 	cpi temp, 8
 	breq pb0epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) left shift will cause last bit to be blank
 	lds temp, nextPattern
 	lsl temp
 	sts nextPattern, temp
+;debugging my bits
+	;lds leds, numberOfBitsInPattern
+	;out portC, leds
 ;	out PORTC, temp
 
 pb0Epilogue:
@@ -300,6 +301,8 @@ main:
 	clear secondCounter
 	clear debounceTimer
 	clear firstPattern
+	ldi temp, 0
+	sts firstPattern, temp
 	ldi temp, 1
 	sts debounceRightStatus, temp 
 	sts debounceLeftStatus, temp 
