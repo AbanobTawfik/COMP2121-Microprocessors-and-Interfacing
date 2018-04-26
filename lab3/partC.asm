@@ -98,7 +98,7 @@ Timer0OVF:
 	lds temp, debounceRightStatus
 	cpi temp, 0
 	breq debounceTime
-	lds temp, debounceRightStatus
+	lds temp, debounceLeftStatus
 	cpi temp, 0
 	breq debounceTime
 	jmp debounceStatusSkip
@@ -116,11 +116,12 @@ debounceTime:
 	sts debounceLeftStatus, temp
 	sts debounceRightStatus, temp
 	clear debounceTimer
+	clr r26
+	clr r27
 
 debounceStatusSkip:
 	sts debounceTimer, r26		;update the value of the temporary counter
 	sts debounceTimer+1, r27
-
 	lds r24, tempCounter
 	lds r25, tempCounter+1
 	adiw r25:r24, 1			;increment the register pair
@@ -235,14 +236,15 @@ PB1_ON_PRESS:
 	ldi temp, 0						;now it will be off so after 100ms will be set on again
 	sts debounceRightStatus, temp   
 	lds temp, numberOfBitsInPattern
-	cpi temp, 8
+	inc temp
+	lds temp, numberOfBitsInPattern
 	breq pb1epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
 	lds temp, nextPattern
 	lsl temp
 	inc temp
 	sts nextPattern, temp
-	out PORTC, temp
+;	out PORTC, temp
 
 pb1Epilogue:
 	;epilogue
@@ -269,13 +271,16 @@ PB0_ON_PRESS:
 	ldi temp, 0						;now it will be off so after 10ms will be set on again
 	sts debounceLeftStatus, temp   
 	lds temp, numberOfBitsInPattern
+	inc temp
+
+	lds temp, numberOfBitsInPattern
 	cpi temp, 8
 	breq pb0epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) left shift will cause last bit to be blank
 	lds temp, nextPattern
 	lsl temp
 	sts nextPattern, temp
-	out PORTC, temp
+;	out PORTC, temp
 
 pb0Epilogue:
 	;epilogue
