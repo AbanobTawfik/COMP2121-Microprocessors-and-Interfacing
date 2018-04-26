@@ -27,7 +27,7 @@
 patternState:
 	.byte 1				;single 8 byte pattern to show
 nextPattern:
-	.byte 1				;single 8 byte pattern which is entered while current is displayed
+	.byte 32				;queue of 8 bit patterns to display
 secondCounter:			;3 flashes 1s each so when this second counter is 3 we reset, and overwrite pattern with new 1
 	.byte 2
 tempCounter:			;used to check if a second has passed
@@ -50,6 +50,11 @@ patternReady:
 	.byte 1
 displayedPattern:
 	.byte 1
+nextPatternSize:
+	.byte 1
+DoubleSpeed:
+	.byte 1
+
 ;from table
 ;PORT D RDX3 INPUTS PB1
 ;PORT D RDX4 INPUTS PB0
