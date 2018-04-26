@@ -140,14 +140,24 @@ debounceStatusSkip:
 	;now we want to make sure there is a pattern to print if not just end
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
-	breq waitForNextPatterncheck1
-
+	brne checkA
+	cpi temp, 8
+	breq checkB
 	lds temp, numberOfFlashes
-	cpi temp, 7
-	brge waitfornextpatterncheck2
+	cpi temp, 6
+	breq resetFlashes
 
 	jmp showPattern
+
+ResetFlashes:
+	ldi temp, 0
+	sts numberOFFlashes, temp
+	jmp timerEpilogue
+
 showPattern:
+	lds temp, numberOFFlashes
+	inc temp
+	sts numberOfFlashes, temp
 	lds temp, enableLights
 	cpi temp, 0x00			;turn off the lights
 	breq flashOff
@@ -155,16 +165,28 @@ showPattern:
 	cpi temp, 0xFF			;turn on the lights
 	breq flashOn
 
-waitForNextPatterncheck1:
-	lds temp, 0
-	sts numberOfBitsInPAttern, temp
-	lds temp, numberOFFlashes
-	cpi temp, 7
-	brlt showPattern
+checkA:
+	lds temp, numberOfFlashes
+	cpi temp, 0
+	breq timerEpilogue
+	jmp showPattern
+
+checkB:
+	lds temp, displayedPattern	
+	cpi temp, 0
+	breq checkB2
+	lds temp, numberOfFlashes
+	cpi temp, 6
+	brne showPattern
+	cpi temp, 6
+	breq setCurrentPattern
+	jmp showPattern
+checkB2:
+	lds temp, numberOfFlashes
+	cpi temp, 0
+	breq setCurrentPattern
+	jmp showPattern
 	
-	jmp setCurrentPattern
-
-
 NotSecond:
 	sts TempCounter, r24		;update the value of the temporary counter
 	sts TempCounter+1, r25	
@@ -179,9 +201,7 @@ waitForNextPatterncheck2:
 	jmp showPattern
 
 flashOff:
-	lds temp, numberOFFlashes
-	inc temp
-	sts numberOfFlashes, temp
+
 	ldi leds, 0x00   ;set led as off pattern
 	out PORTC, leds
 	;set the enable lights to flash on now
@@ -194,10 +214,7 @@ flashOff:
 
 
 flashOn:
-;increment number of flashes
-	lds temp, numberOFFlashes
-	inc temp
-	sts numberOfFlashes, temp
+≈
 	;load pattern onto screen
 	lds temp, patternState
 	out portC, temp
@@ -214,7 +231,8 @@ setCurrentPattern:
 	sts patternState, temp
 	ldi temp, 0
 	sts nextPattern, temp
-	sts numberOfFlashes, temp 
+	sts numberOfFlashes, temp
+	sts numberOfBitsInPattern, temp
 	jmp showPattern
 
 timerEpilogue:
