@@ -12,6 +12,7 @@
 ;bit in the pattern. You should implement debouncing by ignoring spurious interrupts, not by
 ;disabling interrupts or busy-waiting.
 ;this will clear a word in memory at the address the label was located
+.include "m2560def.inc"
 .macro clear
 	ldi YL, low(@0)	
 	ldi YH, high(@0)
@@ -136,13 +137,14 @@ debounceStatusSkip:
 	sts tempCounter, r24
 	sts tempCounter+1, r24
 	
-	ldi leds, 0xFF
+	lds leds, numberOfBitsInPattern
 	out portC, leds
 	
 	;now we want to make sure there is a pattern to print if not just end
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
 	breq waitForNextPatterncheck1
+	jmp timerEpilogue
 showPattern:
 	ldi temp, 0xFF
 	sts displayedPattern, temp 
