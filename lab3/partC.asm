@@ -94,20 +94,33 @@ Timer0OVF:
 	push r25
 	push r24
 	;button debouncing ~100 ms since 7812 = 1 second, 25 ms = 7812/1000 * 100 
-	lds r24, debounceTimer
-	lds r25, debounceTimer+1
-	adiw r25:r24, 1
-	cpi r24, low(800)   ;rounding 800 up ^_^
+;if the buttons status is on we want to start counter to reset it
+	lds temp, debounceRightStatus
+	cpi temp, 0
+	breq debounceTime
+	lds temp, debounceRightStatus
+	cpi temp, 0
+	breq debounceTime
+	jmp debounceStatusSkip
+debounceTime:
+	lds r26, debounceTimer
+	lds r27, debounceTimer+1
+	adiw r27:r26, 1
+	cpi r26, low(800)   ;rounding 800 up ^_^
 	ldi temp, high(800)
-	cpc r25, temp
-
-	breq debounceStatusSkip				;after debouncy has been set to enable debounce statuses
+	cpc temp, r27
+	brne debounceStatusSkip				;after debouncy has been set to enable debounce statuses
 	;now we want to load the value of temporary counter into the register pair r25/r24
+
 	ldi temp,1
 	sts debounceLeftStatus, temp
 	sts debounceRightStatus, temp
+	clear debounceTimer
 
 debounceStatusSkip:
+	sts debounceTimer, r26		;update the value of the temporary counter
+	sts debounceTimer+1, r27
+
 	lds r24, tempCounter
 	lds r25, tempCounter+1
 	adiw r25:r24, 1			;increment the register pair
@@ -280,7 +293,11 @@ main:
 ;we want to load our pattern into the data memory 
 	clear tempCounter
 	clear secondCounter
+	clear debounceTimer
 	clear firstPattern
+	ldi temp, 1
+	sts debounceRightStatus, temp 
+	sts debounceLeftStatus, temp 
 	ldi temp, 0b00000000
 	out TCCR0A, temp
 	ldi temp, 0b00000010
