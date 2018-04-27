@@ -62,8 +62,7 @@ displayedPattern:
 	.byte 1
 numberOfPatternsQueued:
 	.byte 1
-DoubleSpeed:
-	.byte 1
+
 
 ;from table
 ;PORT D RDX3 INPUTS PB1
@@ -120,7 +119,7 @@ Timer0OVF:
 	cpi temp, 0
 	breq debounceTime
 	jmp debounceStatusSkip
-debounceTime:
+debounceTime
 	lds r26, debounceTimer
 	lds r27, debounceTimer+1
 	adiw r27:r26, 1
@@ -237,7 +236,6 @@ waitForNextPatterncheck2:
 	jmp showPattern
 
 flashOff:
-
 	ldi leds, 0x00   ;set led as off pattern
 	out PORTC, leds
 	;set the enable lights to flash on now
@@ -250,7 +248,6 @@ flashOff:
 
 
 flashOn:
-≈
 	;load pattern onto screen
 	lds temp, patternState
 	out portC, temp
@@ -364,7 +361,7 @@ updatePatternsQueued2:
 inputCommand2:
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) left shift will cause last bit to be blank
 	lds temp2, numberOFPatternsQueued
-	lds temp, nextPattern+temp2
+	lds temp, nextPattern(temp2)
 	lsl temp
 	sts nextPattern, temp
 ;debugging my bits
@@ -409,7 +406,6 @@ main:
 	ldi temp, 1<<TOIE0				; 128 microseconds
 	sts TIMSK0, temp				; T/C0 interrupt enable
 	;enable the interrupt for INT0 INT1 based on falling edges of PB1 and PB2
-
 	sei
 
 loop: rjmp loop ; loop 
