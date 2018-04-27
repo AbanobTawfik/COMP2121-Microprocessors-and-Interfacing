@@ -23,11 +23,15 @@
 .endmacro
 .def temp = r16
 .def leds = r17
+.def temp2 = r18
 .dseg
 
 .macro clearQueue
 	ldi temp, 0
-	sts 
+	out PORTC, temp
+	sts patternState, temp
+	sts numberOfPatternsQueued, temp
+	jmp main
 .endmacro
 
 patternState:
@@ -56,7 +60,7 @@ patternReady:
 	.byte 1
 displayedPattern:
 	.byte 1
-nextPatternSize:
+numberOfPatternsQueued:
 	.byte 1
 DoubleSpeed:
 	.byte 1
@@ -134,6 +138,11 @@ debounceTime:
 	clr r27
 
 debounceStatusSkip:
+
+	lds temp, numberOfPatternsQueued
+	cpi temp, 5
+	brge doubleSpeed:
+	
 	sts debounceTimer, r26		;update the value of the temporary counter
 	sts debounceTimer+1, r27
 	lds r24, tempCounter
@@ -147,7 +156,23 @@ debounceStatusSkip:
 	ldi r24, 0
 	sts tempCounter, r24
 	sts tempCounter+1, r24
-	
+	jmp checkConditions
+doubleSpeed:
+	sts debounceTimer, r26		;update the value of the temporary counter
+	sts debounceTimer+1, r27
+	lds r24, tempCounter
+	lds r25, tempCounter+1
+	adiw r25:r24, 1			;increment the register pair
+	cpi r24, low(3906)		;check if the register pair (r25:r24) = 7812
+	ldi temp, high(3906)
+	cpc r25, temp
+	brne NotSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	clear tempCounter
+	ldi r24, 0
+	sts tempCounter, r24
+	sts tempCounter+1, r24
+
+checkConditions:	
 	;now we want to make sure there is a pattern to print if not just end
 	lds temp, numberOfBitsInPattern
 	cpi temp, 8
@@ -277,9 +302,18 @@ PB1_ON_PRESS:
 	cpi temp, 8
 	inc temp
 	sts numberOfBitsInPattern, temp
-	breq pb1epilogue
+	breq updatePatternsQueued
+	jmp inputCommand
+updatePatternsQueued:
+	lds temp, numberOFPatternsQueued
+	inc temp
+	sts numberOfPatternsQueued, temp
+	ldi temp, 0
+	sts numberOfBitsinPattern, temp
+inputCommand:
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
-	lds temp, nextPattern
+	lds temp2, numberOFPatternsQueued
+	lds temp, nextPattern+temp2
 	lsl temp
 	inc temp
 	sts nextPattern, temp
@@ -310,13 +344,21 @@ PB0_ON_PRESS:
 	ldi temp, 0						;now it will be off so after 10ms will be set on again
 	sts debounceLeftStatus, temp   
 	lds temp, numberOfBitsInPattern
-
 	cpi temp, 8
 	inc temp
 	sts numberOfBitsInPattern, temp
-	breq pb0epilogue
+	breq updatePatternsQueued2
+	jmp inputCommand2
+updatePatternsQueued2:
+	lds temp, numberOFPatternsQueued
+	inc temp
+	sts numberOfPatternsQueued, temp
+	ldi temp, 0
+	sts numberOfBitsinPattern, temp
+inputCommand2:
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) left shift will cause last bit to be blank
-	lds temp, nextPattern
+	lds temp2, numberOFPatternsQueued
+	lds temp, nextPattern+temp2
 	lsl temp
 	sts nextPattern, temp
 ;debugging my bits
