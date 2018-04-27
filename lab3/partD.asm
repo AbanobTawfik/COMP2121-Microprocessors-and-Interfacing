@@ -24,6 +24,12 @@
 .def temp = r16
 .def leds = r17
 .dseg
+
+.macro clearQueue
+	ldi temp, 0
+	sts 
+.endmacro
+
 patternState:
 	.byte 1				;single 8 byte pattern to show
 nextPattern:
@@ -329,6 +335,14 @@ pb0Epilogue:
 	out SREG, temp
 	reti	
 
+PUSHED_BOTH_BUTTONS:
+	;i want to clear everything AKA reset everything immediately
+	ldi temp, 0
+	sts patternState, temp
+	out PORTC, temp
+	
+	jmp reset
+	
 
 main:
 ;we want to load our pattern into the data memory 
