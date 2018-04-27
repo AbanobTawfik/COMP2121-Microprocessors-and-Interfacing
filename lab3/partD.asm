@@ -62,6 +62,8 @@ displayedPattern:
 	.byte 1
 numberOfPatternsQueued:
 	.byte 1
+numberOfPatternsShown:
+	.byte 1
 
 
 ;from table
@@ -187,6 +189,9 @@ checkConditions:
 ResetFlashes:
 	ldi temp, 0
 	sts numberOFFlashes, temp
+	lds temp,numberOFPatternsShown
+	inc temp
+	sts numberOfPatternsShown,temp
 	jmp timerEpilogue
 notSecondJmp:
 	jmp notSecond
@@ -252,7 +257,7 @@ flashOff:
 
 flashOn:
 	;load pattern onto screen
-	lds temp, patternState
+	lds temp, patternState+numberOfPatternsShown
 	out portC, temp
 	;set the enable lights to flash on now
 	ldi temp, 0x00
@@ -263,7 +268,11 @@ flashOn:
 	jmp timerEpilogue
 
 setCurrentPattern:
-	lds temp, nextPattern
+
+	lds temp, numberOfPatternsShown
+	inc temp
+	sts numberOfPatternsShown, temp
+	lds temp, nextPattern+numberOfPatternsShown
 	sts patternState, temp
 	ldi temp, 0
 	sts nextPattern, temp
@@ -315,9 +324,8 @@ updatePatternsQueued:
 	sts numberOfBitsinPattern, temp
 inputCommand:
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
-	lds temp2, numberOFPatternsQueued
 	
-	lds temp, nextPattern
+	lds temp, nextPattern+numberOfPatternsQueued
 	lsl temp
 	inc temp
 	sts nextPattern, temp
@@ -367,8 +375,7 @@ updatePatternsQueued2:
 	sts numberOfBitsinPattern, temp
 inputCommand2:
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) left shift will cause last bit to be blank
-	lds temp2, numberOFPatternsQueued
-	lds temp, nextPattern
+	lds temp, nextPattern+numberOFPatternsQueued
 	lsl temp
 	sts nextPattern, temp
 ;debugging my bits
