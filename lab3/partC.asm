@@ -1,3 +1,4 @@
+
 ;Part C – Dynamic Pattern (4 Marks)
 ;Use the two push buttons to enter a binary pattern, and then display it on the LEDs. The left button
 ;(PB1) will enter a 1, and the right button (PB0) will enter a 0. When 8 bits have been collected, they
@@ -109,8 +110,8 @@ debounceTime:
 	lds r26, debounceTimer
 	lds r27, debounceTimer+1
 	adiw r27:r26, 1
-	cpi r26, low(800)   ;rounding 800 up ^_^
-	ldi temp, high(800)
+	cpi r26, low(1800)   ;rounding 800 up ^_^
+	ldi temp, high(1800)
 	cpc temp, r27
 	brne debounceStatusSkip				;after debouncy has been set to enable debounce statuses
 	;now we want to load the value of temporary counter into the register pair r25/r24
@@ -143,9 +144,8 @@ debounceStatusSkip:
 	breq waitForNextPatterncheck1
 
 	lds temp, numberOfFlashes
-	cpi temp, 7
+	cpi temp, 6
 	brge waitfornextpatterncheck2
-
 	jmp showPattern
 showPattern:
 	lds temp, enableLights
@@ -197,6 +197,9 @@ flashOn:
 ;increment number of flashes
 	lds temp, numberOFFlashes
 	inc temp
+	;out portC, temp
+	cpi temp, 8
+	brge timerEpilogue
 	sts numberOfFlashes, temp
 	;load pattern onto screen
 	lds temp, patternState
@@ -215,6 +218,7 @@ setCurrentPattern:
 	ldi temp, 0
 	sts nextPattern, temp
 	sts numberOfFlashes, temp 
+	sts numberOfBitsInPattern, temp
 	jmp showPattern
 
 timerEpilogue:
@@ -246,6 +250,7 @@ PB1_ON_PRESS:
 	cpi temp, 8
 	inc temp
 	sts numberOfBitsInPattern, temp
+	;out portC, temp
 	breq pb1epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
 	lds temp, nextPattern
@@ -327,3 +332,18 @@ main:
 	sei
 
 loop: rjmp loop ; loop 
+
+	ldi temp, 0b00000010			
+	out TCCR0B, temp				; prescalining = 8
+	
+	ldi temp, 1<<TOIE0				; 128 microseconds
+	sts TIMSK0, temp				; T/C0 interrupt enable
+	
+
+
+		ldi temp, 0b00000000
+	out TCCR0A, temp
+	ldi temp, 0b00000010
+	out TCCR0B, temp				; prescalining = 8
+	ldi temp, 1<<TOIE0				; 128 microseconds
+	sts TIMSK0, temp				; T/C0 interrupt enable
