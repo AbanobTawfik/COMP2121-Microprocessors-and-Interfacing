@@ -296,6 +296,9 @@ PB1_ON_PRESS:
 	lds temp, debounceRightStatus
 	cpi temp, 1
 	brne pb1epilogue				;the status will be on 10ms after button is pressed
+	lds temp, debounceLeftStatus
+	cpi temp, 0
+	breq PUSHED_BOTH_BUTTONS
 	ldi temp, 0						;now it will be off so after 100ms will be set on again
 	sts debounceRightStatus, temp   
 	lds temp, numberOfBitsInPattern
@@ -341,6 +344,9 @@ PB0_ON_PRESS:
 	lds temp, debounceLeftStatus
 	cpi temp, 1
 	brne pb0epilogue				;the status will be on 10ms after button is pressed
+	lds temp, debounceRightStatus
+	cpi temp, 0
+	breq PUSHED_BOTH_BUTTONS
 	ldi temp, 0						;now it will be off so after 10ms will be set on again
 	sts debounceLeftStatus, temp   
 	lds temp, numberOfBitsInPattern
@@ -382,8 +388,7 @@ PUSHED_BOTH_BUTTONS:
 	ldi temp, 0
 	sts patternState, temp
 	out PORTC, temp
-	
-	jmp reset
+	clearQueue
 	
 
 main:
