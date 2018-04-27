@@ -131,7 +131,7 @@ debounceStatusSkip:
 	cpi r24, low(7812)		;check if the register pair (r25:r24) = 7812
 	ldi temp, high(7812)
 	cpc r25, temp
-	brne NotSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	brne NotSecondjmp			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
 	clear tempCounter
 	ldi r24, 0
 	sts tempCounter, r24
@@ -153,7 +153,8 @@ ResetFlashes:
 	ldi temp, 0
 	sts numberOFFlashes, temp
 	jmp timerEpilogue
-
+NotSecondJmp:
+	jmp notSecond
 showPattern:
 	lds temp, numberOFFlashes
 	inc temp
@@ -168,9 +169,11 @@ showPattern:
 checkA:
 	lds temp, numberOfFlashes
 	cpi temp, 0
-	breq timerEpilogue
+	breq timerEpiloguejmp
 	jmp showPattern
 
+timerEpilogueJmp:
+	jmp timerEPilogue
 checkB:
 	lds temp, displayedPattern	
 	cpi temp, 0
@@ -214,7 +217,6 @@ flashOff:
 
 
 flashOn:
-≈
 	;load pattern onto screen
 	lds temp, patternState
 	out portC, temp
