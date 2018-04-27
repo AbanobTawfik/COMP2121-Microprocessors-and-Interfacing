@@ -119,7 +119,7 @@ Timer0OVF:
 	cpi temp, 0
 	breq debounceTime
 	jmp debounceStatusSkip
-debounceTime
+debounceTime:
 	lds r26, debounceTimer
 	lds r27, debounceTimer+1
 	adiw r27:r26, 1
@@ -140,7 +140,7 @@ debounceStatusSkip:
 
 	lds temp, numberOfPatternsQueued
 	cpi temp, 5
-	brge doubleSpeed:
+	brge doubleSpeed
 	
 	sts debounceTimer, r26		;update the value of the temporary counter
 	sts debounceTimer+1, r27
@@ -150,7 +150,7 @@ debounceStatusSkip:
 	cpi r24, low(7812)		;check if the register pair (r25:r24) = 7812
 	ldi temp, high(7812)
 	cpc r25, temp
-	brne NotSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	brne NotSecondjmp			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
 	clear tempCounter
 	ldi r24, 0
 	sts tempCounter, r24
@@ -165,7 +165,7 @@ doubleSpeed:
 	cpi r24, low(3906)		;check if the register pair (r25:r24) = 7812
 	ldi temp, high(3906)
 	cpc r25, temp
-	brne NotSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	brne NotSecondjmp			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
 	clear tempCounter
 	ldi r24, 0
 	sts tempCounter, r24
@@ -188,7 +188,8 @@ ResetFlashes:
 	ldi temp, 0
 	sts numberOFFlashes, temp
 	jmp timerEpilogue
-
+notSecondJmp:
+	jmp notSecond
 showPattern:
 	lds temp, numberOFFlashes
 	inc temp
@@ -203,9 +204,11 @@ showPattern:
 checkA:
 	lds temp, numberOfFlashes
 	cpi temp, 0
-	breq timerEpilogue
+	breq timerEpilogue2
 	jmp showPattern
 
+timerEpilogue2:
+	jmp timerEpilogue
 checkB:
 	lds temp, displayedPattern	
 	cpi temp, 0
@@ -295,7 +298,7 @@ PB1_ON_PRESS:
 	brne pb1epilogue				;the status will be on 10ms after button is pressed
 	lds temp, debounceLeftStatus
 	cpi temp, 0
-	breq PUSHED_BOTH_BUTTONS
+	breq PUSHED_BOTH_BUTTONSJMP
 	ldi temp, 0						;now it will be off so after 100ms will be set on again
 	sts debounceRightStatus, temp   
 	lds temp, numberOfBitsInPattern
@@ -313,11 +316,15 @@ updatePatternsQueued:
 inputCommand:
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
 	lds temp2, numberOFPatternsQueued
-	lds temp, nextPattern+temp2
+	
+	lds temp, nextPattern
 	lsl temp
 	inc temp
 	sts nextPattern, temp
 ;	out PORTC, temp
+
+PUSHED_BOTH_BUTTONSJMP:
+	jmp PUSHED_BOTH_BUTTONS
 
 pb1Epilogue:
 	;epilogue
@@ -343,7 +350,7 @@ PB0_ON_PRESS:
 	brne pb0epilogue				;the status will be on 10ms after button is pressed
 	lds temp, debounceRightStatus
 	cpi temp, 0
-	breq PUSHED_BOTH_BUTTONS
+	breq PUSHED_BOTH_BUTTONSJMP
 	ldi temp, 0						;now it will be off so after 10ms will be set on again
 	sts debounceLeftStatus, temp   
 	lds temp, numberOfBitsInPattern
@@ -361,7 +368,7 @@ updatePatternsQueued2:
 inputCommand2:
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) left shift will cause last bit to be blank
 	lds temp2, numberOFPatternsQueued
-	lds temp, nextPattern(temp2)
+	lds temp, nextPattern
 	lsl temp
 	sts nextPattern, temp
 ;debugging my bits
