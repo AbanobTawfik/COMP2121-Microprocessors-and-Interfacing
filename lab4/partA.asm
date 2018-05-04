@@ -26,7 +26,6 @@ You will need to activate the pull-up resistors on the input pins to reliably de
 .equ INITROWMASK = 0x01				; 0b0000 0001 scan from the top row
 .equ ROWMASK = 0x0F					; for obtaining input from Port L
 
-
 RESET:
 ldi temp1, low(RAMEND)				; initialize the stack
 out SPL, temp1
@@ -114,7 +113,7 @@ mov temp1, row						; Otherwise we have a number in 1-9
 lsl temp1							; this will multiply temp1 by 2 
 add temp1, row						; now we have 2temp1 + temp 1 = 3temp1
 add temp1, col						; temp1 = row*3 + col
-subi temp1, -'1'					; Add the value of character ‘1’ since we aren't starting at 0
+subi temp1, -1					; Add the value of character ‘1’ since we aren't starting at 0
 jmp convert_end
 
 symbols:
@@ -126,18 +125,8 @@ jmp main							; otherwise so we do not handle -> MAIN
 
 
 zero:
-ldi temp1, '0'						; Set to zero
+ldi temp1, 0						; Set to zero
 
 convert_end:
 out PORTC, temp1					; Write value to PORTC
 jmp main							; Restart main loop
-
-/*
-sec ; else shift the column mask:
-; We must set the carry bit
-rol mask ; and then rotate left by a bit,
-; shifting the carry into
-; bit zero. We need this to make
-; sure all the rows have
-; pull-up resistors
-*/
