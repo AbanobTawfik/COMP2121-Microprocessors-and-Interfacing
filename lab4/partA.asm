@@ -16,8 +16,9 @@ You will need to activate the pull-up resistors on the input pins to reliably de
 .def temp1 = r20
 .def temp2 = r21
 
-//in the LCD PL7->PL4 are all connected to the lcd screen (wired) so we want them to be output
-//int he keypad PL3->PL0 are all connected to the keypad (wired) so we want them to be our input
+//we are setting this up so the higher bits (columns) are input
+//and the lower 4 bits which are row, are output
+//we press key will check which column has the low row
 .equ PORTLDIR = 0xF0				; PL7-4: output, PL3-0, input 
 
 //for each search we want to start our search at the right most column 0xEF -> 
@@ -52,9 +53,13 @@ sts PORTL, cmask					; Otherwise, scan the next column.
 ldi temp1, 0xFF						; Slowing down the scan operation.
 
 delay:								; debouncer for key scan
-dec temp1
+dec temp1							; will be set up as pull-up resistors
 brne delay
 
+//we want to load our current cmask (column index) into temp1
+//then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low
+//if we and them together, and get 0xf, that means we have no low rows (so we want to go to next column)
+//since 0x1111 means all row are high but any other result would be low eg 0x0001 -> row 0 or row 3 is low (depends on bit mantisa)
 lds temp1, PINL						; Read PORTL
 andi temp1, ROWMASK					; Get the keypad output value
 cpi temp1, 0xF						; Check if any row is low
@@ -68,6 +73,9 @@ cpi row, 4							; if all the rows are scanned we want to go to the next column 
 breq nextcol						; NEXT COLUMN.
 
 ; now we are checking if the key in the column and row index has been pressed
+; temp1 will have our low rows from previous and. if we and the low rows with the rowmask we currently have
+; if result = 0 -> we have a low row key pressed -> convert
+; otherwise we want to keep scanning through the rows
 mov temp2, temp1
 and temp2, rmask					; check un-masked bit (i.e the row column index is LOW -> KEY PRESSED DING DING DING)
 breq convert						; if bit is clear, the key is pressed
@@ -77,8 +85,10 @@ lsl rmask							; want to increment the row to scan
 jmp rowloop
 
 nextcol:							; if row scan is over
-lsl cmask
+
+lsl cmask							; left shit the column mask
 inc col								; increase column value
+
 jmp colloop							; go to the next column
 
 
@@ -121,3 +131,13 @@ ldi temp1, '0'						; Set to zero
 convert_end:
 out PORTC, temp1					; Write value to PORTC
 jmp main							; Restart main loop
+
+/*
+sec ; else shift the column mask:
+; We must set the carry bit
+rol mask ; and then rotate left by a bit,
+; shifting the carry into
+; bit zero. We need this to make
+; sure all the rows have
+; pull-up resistors
+*/
