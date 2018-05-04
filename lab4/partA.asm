@@ -16,10 +16,14 @@ You will need to activate the pull-up resistors on the input pins to reliably de
 .def temp1 = r20
 .def temp2 = r21
 
-.equ PORTADIR = 0xF0				; PD7-4: output, PD3-0, input
-.equ INITCOLMASK = 0xEF				; 0b1111 1111 scan from the rightmost column,
+//in the LCD PL7->PL4 are all connected to the lcd screen (wired) so we want them to be output
+//int he keypad PL3->PL0 are all connected to the keypad (wired) so we want them to be our input
+.equ PORTLDIR = 0xF0				; PL7-4: output, PL3-0, input 
+
+//for each search we want to start our search at the right most column 0xEF -> 
+.equ INITCOLMASK = 0xEF				; 0b1110 1111 scan from the rightmost column,
 .equ INITROWMASK = 0x01				; 0b0000 0001 scan from the top row
-.equ ROWMASK = 0x0F					; for obtaining input from Port D (first 4 bits output second are input)
+.equ ROWMASK = 0x0F					; for obtaining input from Port L
 
 
 RESET:
@@ -27,8 +31,10 @@ ldi temp1, low(RAMEND)				; initialize the stack
 out SPL, temp1
 ldi temp1, high(RAMEND)
 out SPH, temp1
-ldi temp1, PORTADIR					; PA7:4/PA3:0, out/in
-out DDRA, temp1
+
+//since portL cannot support 16 bit instruction out and in we use sts and lds instead
+ldi temp1, PORTLDIR					; PA7:4/PA3:0, out/in
+sts DDRL, temp1
 //will make portC output 0xff
 ser temp1							; PORTC is output
 out DDRC, temp1
@@ -41,17 +47,18 @@ clr col								; initial column index = 0
 colloop:
 cpi col, 4
 breq main							; If all columns are scanned, go back to main.      
-out PORTA, cmask					; Otherwise, scan the next column.
+//PORT H -> L CAN ONLY USE STS AND LDS DO NOT SUPPORT OUT AND IN
+sts PORTL, cmask					; Otherwise, scan the next column.
 ldi temp1, 0xFF						; Slowing down the scan operation.
 
 delay:								; debouncer for key scan
 dec temp1
 brne delay
 
-in temp1, PINA						; Read PORTA
+lds temp1, PINL						; Read PORTL
 andi temp1, ROWMASK					; Get the keypad output value
 cpi temp1, 0xF						; Check if any row is low
-breq nextcol
+breq nextcol						//if no rows are low i.e all 1111 for the rows we wana ignore dat shit NEXTT
 ; If yes, find which row is low
 ldi rmask, INITROWMASK				; Initialize for row check
 clr row  
@@ -60,8 +67,9 @@ rowloop:
 cpi row, 4							; if all the rows are scanned we want to go to the next column since no more rows to check in that column
 breq nextcol						; NEXT COLUMN.
 
+; now we are checking if the key in the column and row index has been pressed
 mov temp2, temp1
-and temp2, rmask					; check un-masked bit
+and temp2, rmask					; check un-masked bit (i.e the row column index is LOW -> KEY PRESSED DING DING DING)
 breq convert						; if bit is clear, the key is pressed
 
 inc row								; else move to the next row (keep scanning)
