@@ -93,17 +93,17 @@ cpi row, 3							; If the key is in row3, (row 3 -> symbols)
 breq symbols						; we have a symbol or 0
 
 mov temp1, row						; Otherwise we have a number in 1-9
-lsl temp1
-add temp1, row
+lsl temp1							; this will multiply temp1 by 2 
+add temp1, row						; now we have 2temp1 + temp 1 = 3temp1
 add temp1, col						; temp1 = row*3 + col
-subi temp1, -'1'					; Add the value of character ‘1’
+subi temp1, -'1'					; Add the value of character ‘1’ since we aren't starting at 0
 jmp convert_end
 
 symbols:
 cpi col, 0							; Check if we have a star
 breq main							; if so do not handle -> MAIN
 cpi col, 1							; or if we have zero
-breq zero
+breq zero							; we print zeroes!
 jmp main							; otherwise so we do not handle -> MAIN
 
 
