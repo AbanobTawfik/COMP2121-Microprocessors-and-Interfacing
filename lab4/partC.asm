@@ -99,7 +99,6 @@ RESET:
 main:
 	ldi cmask, INITCOLMASK				; initial column mask
 	clr col								; initial column index = 0
-	clr bottomRow
 
 colloop:
 	cpi col, 4
@@ -115,9 +114,9 @@ delay:									; debouncer for key scan
 	call sleep_5ms
 	call sleep_5ms						; further debouncing just incase
 	call sleep_5ms
-	call sleep_5ms
-	call sleep_5ms
-	call sleep_5ms
+
+
+
 
 	//we want to load our current cmask (column index) into temp1
 	//then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low
@@ -166,10 +165,10 @@ convert:
 	add temp1, row						; now we have 2temp1 + temp 1 = 3temp1
 	add temp1, col						; temp1 = row*3 + col
 	subi temp1, -1						; Add the value of character ‘1’ since we aren't starting at 0
-	ldi r24, 10
-	mul bottomRow, r24						; to append the number to the end (base 10 digits) we multiply by 10
+	ldi XH, 10	
+	mul bottomRow, XH						; to append the number to the end (base 10 digits) we multiply by 10
+	mov bottomRow, r0
 	add bottomRow, temp1					; append the number to the end
-
 	jmp display
 
 symbols:
@@ -187,15 +186,13 @@ letters:
 	jmp main
 
 addition:
+	
 ;add to the accumulated value the value on the bottom entered 
 	add topRow, bottomRow
 ;reset value on bottom
 	clr bottomRow
+	do_lcd_command 0b00000001 ; clear display
 ;now we want to update display
-
-	do_lcd_command 0b0011000000    ; address of second line on lcd
-	;initally load 0 on reset in top left corner
-	do_lcd_data '0'
 ;return to main
 	jmp display
 
@@ -204,11 +201,8 @@ subtraction:
 	sub topRow, bottomRow 
 ;reset value on bottom
 	clr bottomRow
+	do_lcd_command 0b00000001 ; clear display
 ;now we want to update display
-
-	do_lcd_command 0b0011000000    ; address of second line on lcd
-	;initally load 0 on reset in top left corner
-	do_lcd_data '0'
 ;return to main
 	jmp display
 
@@ -234,21 +228,11 @@ star:
 
 
 display:
-	do_lcd_command 0b00111000 ; 2x5x7
-	rcall sleep_5ms
-	do_lcd_command 0b00111000 ; 2x5x7
-	rcall sleep_1ms
-	do_lcd_command 0b00111000 ; 2x5x7
-	do_lcd_command 0b00111000 ; 2x5x7
-	do_lcd_command 0b00001000 ; display off?
-	do_lcd_command 0b00000001 ; clear display
-	do_lcd_command 0b00000110 ; increment, no display shift
-	do_lcd_command 0b00001110 ; Cursor on, bar, no blink
 	
 	do_lcd_command 0b10000000    ; address of first line on lcd
 	do_lcd_8bit topRow
 
-	do_lcd_command 0b00110000    ; address of second line on lcd
+	do_lcd_command 0b0011000000    ; address of second line on lcd
 	;now we want to print our bottom row register in the bottom row
 	do_lcd_8bit bottomRow
 
@@ -264,6 +248,7 @@ We only want to consider the following
 key value = 3*(row number+1) + (col number + 1)  since indexing starts at 0
 
 */
+
 .equ LCD_RS = 7
 .equ LCD_E = 6
 .equ LCD_RW = 5
@@ -377,6 +362,7 @@ print2Digits:
 printDigit:
 	pop temp1
 	subi temp1, -'0' 
+
 	do_lcd_data_in_register temp1
 	ret
 	
