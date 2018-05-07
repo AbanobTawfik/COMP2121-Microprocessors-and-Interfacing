@@ -18,8 +18,15 @@
 	rcall lcd_command
 	rcall lcd_wait
 .endmacro
+
 .macro do_lcd_data
 	ldi r16, @0
+	rcall lcd_data
+	rcall lcd_wait
+.endmacro
+
+.macro do_lcd_data_in_register
+	mov r16, @0
 	rcall lcd_data
 	rcall lcd_wait
 .endmacro
@@ -257,20 +264,6 @@ We only want to consider the following
 key value = 3*(row number+1) + (col number + 1)  since indexing starts at 0
 
 */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 .equ LCD_RS = 7
 .equ LCD_E = 6
 .equ LCD_RW = 5
@@ -327,7 +320,7 @@ add_hundreds:
 	ldi flag, 0xff
 	;increment the digits counter for hundreds
 	inc XL
-	sub r16, 100
+	subi r16, 100
 	jmp Hundreds_Counter
 
 save_counter_hundreds:
@@ -344,7 +337,7 @@ add_tens:
 	ldi flag, 0xff
 	;increment the digits counter for hundreds
 	inc XL
-	sub r16, 10
+	subi r16, 10
 	jmp tens_counter
 
 save_counter_tens:
@@ -352,20 +345,39 @@ save_counter_tens:
 	push XL
 	inc numberSize
 	clr flag
-	clr digits
+	clr XL
 	jmp ones_Counter
 	;we want to push onto 
 
 print3Digits:
-	
+	pop flag
+	pop temp1
+	pop temp2
+
+	;converting the integers into ascii for display (no addi) feelsbadman 
+	subi temp2, -'0' 
+	subi temp1, -'0' 
+	subi flag, -'0' 
+	do_lcd_data_in_register temp2
+	do_lcd_data_in_register temp1
+	do_lcd_data_in_register flag
 	ret
 
 print2Digits:
+	pop temp1
+	pop temp2
 
+	subi temp2, -'0' 
+	subi temp1, -'0' 
+
+	do_lcd_data_in_register temp2
+	do_lcd_data_in_register temp1
 	ret
 
 printDigit:
-
+	pop temp1
+	subi temp1, -'0' 
+	do_lcd_data_in_register temp1
 	ret
 	
 ;
