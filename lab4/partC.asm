@@ -1,15 +1,15 @@
-;Part C – Calculator (4 Marks)
-;Use the keypad and LCD together to implement a simple unsigned 8-bit calculator. The program
-;should allow the user to enter decimal numbers using the number keys on the keypad. Numbers
-;should be displayed on the bottom row of the LCD as they are entered. You do not need to handle
-;overflow.
-;The calculator should use an accumulator that is initialised to 0 when the program starts. Pressing
-;the ‘*’ button should reset the accumulator to 0 and clear the current input. The current
-;accumulator should be displayed on the top line of the LCD at all times.
-;After a number has been entered, the buttons ‘A’ and ‘B’ are used to add or subtract the new
-;number from the accumulator.
-;Each key press must be registered only once, and holding down a key should not result in multiple
-;inputs. This will require some form of debouncing.
+; Part C – Calculator (4 Marks)
+; Use the keypad and LCD together to implement a simple unsigned 8-bit calculator. The program
+; should allow the user to enter decimal numbers using the number keys on the keypad. Numbers
+; should be displayed on the bottom row of the LCD as they are entered. You do not need to handle
+; overflow.
+; The calculator should use an accumulator that is initialised to 0 when the program starts. Pressing
+; the ‘*’ button should reset the accumulator to 0 and clear the current input. The current
+; accumulator should be displayed on the top line of the LCD at all times.
+; After a number has been entered, the buttons ‘A’ and ‘B’ are used to add or subtract the new
+; number from the accumulator.
+; Each key press must be registered only once, and holding down a key should not result in multiple
+; inputs. This will require some form of debouncing.
 
 .include "m2560def.inc"
 
@@ -23,6 +23,13 @@
 	rcall lcd_data
 	rcall lcd_wait
 .endmacro
+
+.macro do_lcd_8bit
+	mov r16, @0
+	rcall lcd_8bit
+	rcall lcd_wait
+.endmacro
+
 .def row = r16						; current row number
 .def col = r17						; current column number
 .def rmask = r18					; mask for current row during scan
@@ -31,6 +38,8 @@
 .def temp2 = r21
 .def topRow = r22
 .def bottomRow = r23
+.def numberSize = r24
+.def flag = r25
 
 .equ PORTLDIR = 0xF0				; PL7-4: output, PL3-0, input 
 
@@ -97,7 +106,7 @@ delay:									; debouncer for key scan
 	brne delay
 	call sleep_5ms
 	call sleep_5ms
-	call sleep_5ms						; further debouncing
+	call sleep_5ms						; further debouncing just incase
 	call sleep_5ms
 	call sleep_5ms
 	call sleep_5ms
@@ -154,13 +163,13 @@ convert:
 	mul bottomRow, r24						; to append the number to the end (base 10 digits) we multiply by 10
 	add bottomRow, temp1					; append the number to the end
 
-	jmp bottomRowDisplay
+	jmp display
 
 symbols:
 	cpi col, 0							; Check if we have a star
 	breq star							; if so do not handle -> MAIN
 	cpi col, 1							; or if we have zero
-	breq zero							; we print zeroes!
+	breq display							; we print zeroes!
 	jmp main							; otherwise so we do not handle -> MAIN
 
 letters:
@@ -181,7 +190,7 @@ addition:
 	;initally load 0 on reset in top left corner
 	do_lcd_data '0'
 ;return to main
-	jmp main
+	jmp display
 
 subtraction:
 ;add to the accumulated value the value on the bottom entered 
@@ -194,7 +203,7 @@ subtraction:
 	;initally load 0 on reset in top left corner
 	do_lcd_data '0'
 ;return to main
-	jmp main
+	jmp display
 
 star:
 	;resetting the lcd
@@ -216,18 +225,28 @@ star:
 	clr bottomRow
 	jmp main
 
-zero:
-	ldi temp1, 0						; Set to zero
-	jmp bottomRowDisplay
-    
 
-bottomRowDisplay:
-	do_lcd_command 0b0011000000    ; address of second line on lcd
+display:
+	do_lcd_command 0b00111000 ; 2x5x7
+	rcall sleep_5ms
+	do_lcd_command 0b00111000 ; 2x5x7
+	rcall sleep_1ms
+	do_lcd_command 0b00111000 ; 2x5x7
+	do_lcd_command 0b00111000 ; 2x5x7
+	do_lcd_command 0b00001000 ; display off?
+	do_lcd_command 0b00000001 ; clear display
+	do_lcd_command 0b00000110 ; increment, no display shift
+	do_lcd_command 0b00001110 ; Cursor on, bar, no blink
+	
+	do_lcd_command 0b10000000    ; address of first line on lcd
+	do_lcd_8bit topRow
+
+	do_lcd_command 0b00110000    ; address of second line on lcd
 	;now we want to print our bottom row register in the bottom row
+	do_lcd_8bit bottomRow
 
 	jmp main
-
-
+	
 /*
 We only want to consider the following
 1-3 row 0, col 0-2 1->[0,0] 2->[0,1] 3->[0,2]
@@ -264,10 +283,28 @@ key value = 3*(row number+1) + (col number + 1)  since indexing starts at 0
 	cbi PORTA, @0
 .endmacro
 
+
+; 8bit digit stored in r16
+; since 8 bit max is 255, maximum digit 100's, 10's ,1's -> NO case of 1000's
+; want to first start with 100's, subtract 100 compare with 0, increment the hundreds counter each time > 0	
+; once < 0, we want to subtract 10's compare with 0, increment the tens counter each time > 0
+; once < 0, we want to subtract 1's compare with 0, increment the ones counter each time > 0
+; we want to convert those counters into ascii, then lcd_data command easy
+lcd_8bit:
+	ldi flag, 0
+	Hundreds_Counter:
+		cpi r16, 100
+		brsh add_hundreds
+		cpi 
+	
+	add_hundreds:
+
+	ret
+
+
 ;
 ; Send a command to the LCD (r16)
 ;
-
 lcd_command:
 	out PORTF, r16
 	rcall sleep_1ms
