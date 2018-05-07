@@ -291,17 +291,83 @@ key value = 3*(row number+1) + (col number + 1)  since indexing starts at 0
 ; once < 0, we want to subtract 1's compare with 0, increment the ones counter each time > 0
 ; we want to convert those counters into ascii, then lcd_data command easy
 lcd_8bit:
+;flag for checking if integer type is there
 	ldi flag, 0
+	ldi XL, 0
+	ldi numberSize, 0
 	Hundreds_Counter:
 		cpi r16, 100
 		brsh add_hundreds
-		cpi 
+		cpi flag, 0
+		brne save_counter_hundreds
 	
-	add_hundreds:
+	Tens_Counter:
+		cpi r16, 10
+		brsh add_tens
+		;say we have the number 100, since 100 - 100 = 0, we have no numebr to compare with but we still need to load in 0
+		cpi numberSize, 1
+		breq save_counter_tens
+		cpi flag, 0
+		brne save_counter_tens
+
+   ;since the ones are always no matter what shown for all numbers, we can just store the remainder of our check hundreds and check tens
+	Ones_Counter:
+		push r16			; the remainder from our tens and hundreds
+		inc numberSize		; increase number size by 1
+		;now we want to print based on how many numbers there are
+		cpi numberSize, 3
+		breq print3Digits
+		cpi numberSize, 2
+		breq print2Digits
+		cpi numberSize, 1
+		breq printDigit
+
+add_hundreds:
+;set flag as true there are hundreds digits
+	ldi flag, 0xff
+	;increment the digits counter for hundreds
+	inc XL
+	sub r16, 100
+	jmp Hundreds_Counter
+
+save_counter_hundreds:
+;we want to store the hundreds digit counter 	
+	push XL
+	inc numberSize
+	clr flag
+	clr XL
+	jmp Tens_Counter
+	;we want to push onto 
+	
+add_tens:
+;set flag as true there are hundreds digits
+	ldi flag, 0xff
+	;increment the digits counter for hundreds
+	inc XL
+	sub r16, 10
+	jmp tens_counter
+
+save_counter_tens:
+;we want to store the hundreds digit counter 	
+	push XL
+	inc numberSize
+	clr flag
+	clr digits
+	jmp ones_Counter
+	;we want to push onto 
+
+print3Digits:
+	
+	ret
+
+print2Digits:
 
 	ret
 
+printDigit:
 
+	ret
+	
 ;
 ; Send a command to the LCD (r16)
 ;
