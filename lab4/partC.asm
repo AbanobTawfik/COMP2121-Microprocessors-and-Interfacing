@@ -110,13 +110,7 @@ colloop:
 delay:									; debouncer for key scan
 	dec temp1							; will be set up as pull-up resistors
 	brne delay
-	call sleep_5ms
-	call sleep_5ms
-	call sleep_5ms						; further debouncing just incase
-	call sleep_5ms
-
-
-
+	call sleep_35ms						; debouncing 10ms
 
 	//we want to load our current cmask (column index) into temp1
 	//then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low
@@ -175,14 +169,22 @@ symbols:
 	cpi col, 0							; Check if we have a star
 	breq star							; if so do not handle -> MAIN
 	cpi col, 1							; or if we have zero
-	breq display							; we print zeroes!
+	breq multiply10						; multiply by 10
 	jmp main							; otherwise so we do not handle -> MAIN
+
+multiply10:
+	ldi XH, 10	
+	mul bottomRow, XH						; to append the number to the end (base 10 digits) we multiply by 10
+	mov bottomRow, r0
+	jmp display
 
 letters:
 	cpi row, 0							;row 0 in col 3 -> A -> ADDITION
 	breq addition
 	cpi row, 1
 	breq subtraction
+	cpi row, 2
+	breq multiplication
 	jmp main
 
 addition:
@@ -206,6 +208,28 @@ subtraction:
 ;return to main
 	jmp display
 
+display:
+	
+	do_lcd_command 0b10000000    ; address of first line on lcd
+	do_lcd_8bit topRow
+
+	do_lcd_command 0b0011000000    ; address of second line on lcd
+	;now we want to print our bottom row register in the bottom row
+	do_lcd_8bit bottomRow
+
+	jmp main
+
+multiplication:
+;add to the accumulated value the value on the bottom entered 
+	mul topRow, bottomRow 
+;reset value on bottom
+	mov topRow, r0
+	clr bottomRow
+	do_lcd_command 0b00000001 ; clear display
+;now we want to update display
+;return to main
+	jmp display	
+
 star:
 	;resetting the lcd
 	;initalising the output in lcd 
@@ -227,16 +251,7 @@ star:
 	jmp main
 
 
-display:
-	
-	do_lcd_command 0b10000000    ; address of first line on lcd
-	do_lcd_8bit topRow
 
-	do_lcd_command 0b0011000000    ; address of second line on lcd
-	;now we want to print our bottom row register in the bottom row
-	do_lcd_8bit bottomRow
-
-	jmp main
 	
 /*
 We only want to consider the following
@@ -431,4 +446,15 @@ sleep_5ms:
 	rcall sleep_1ms
 	rcall sleep_1ms
 	rcall sleep_1ms
+	ret
+sleep_35ms:
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+
+
 	ret
