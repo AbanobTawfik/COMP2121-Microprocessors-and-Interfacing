@@ -297,6 +297,8 @@ display:
 	;now we want to print our bottom row register in the bottom row
 	do_lcd_8bit bottomRow
 
+	out portC, bottomRow
+
 	jmp main
 star:
 	;resetting the lcd
@@ -366,6 +368,7 @@ divide8bit:
 	ldi temp1, 0
 	mov temp2, topRow
 	mov row, bottomRow
+	;out PORTc, row
 	cpi row, 0
 	breq endDivide2
 
@@ -373,8 +376,9 @@ divisionPart:
 	; taking ceiling so pre-increment, if want floor post increment
 	inc temp1
 	sub temp2, row
-	cpi temp2, 1
-	brlt endDivide
+
+	cp temp2, row
+	brlo endDivide
 	jmp divisionPart
 
 endDivide:
@@ -400,7 +404,7 @@ endDivide2:
 lcd_8bit:
 ;flag for checking if integer type is there
 	ldi flag, 0
-	ldi XL, 0
+	ldi temp1, 0
 	ldi numberSize, 0
 	Hundreds_Counter:
 		cpi r16, 100
@@ -411,7 +415,7 @@ lcd_8bit:
 	Tens_Counter:
 		cpi r16, 10
 		brsh add_tens
-		;say we have the number 100, since 100 - 100 = 0, we have no numebr to compare with but we still need to load in 0
+		;say we have the number 100, since 100 - 100 = 0, we have no numebr to compare with but we still need to load in 0 so we dont just print 1
 		cpi numberSize, 1
 		breq save_counter_tens
 		cpi flag, 0
@@ -433,16 +437,16 @@ add_hundreds:
 ;set flag as true there are hundreds digits
 	ldi flag, 0xff
 	;increment the digits counter for hundreds
-	inc XL
+	inc temp1
 	subi r16, 100
 	jmp Hundreds_Counter
 
 save_counter_hundreds:
 ;we want to store the hundreds digit counter 	
-	push XL
+	push temp1
 	inc numberSize
 	clr flag
-	clr XL
+	clr temp1
 	jmp Tens_Counter
 	;we want to push onto 
 	
@@ -450,16 +454,16 @@ add_tens:
 ;set flag as true there are hundreds digits
 	ldi flag, 0xff
 	;increment the digits counter for hundreds
-	inc XL
+	inc temp1
 	subi r16, 10
 	jmp tens_counter
 
 save_counter_tens:
 ;we want to store the hundreds digit counter 	
-	push XL
+	push temp1
 	inc numberSize
 	clr flag
-	clr XL
+	clr temp1
 	jmp ones_Counter
 	;we want to push onto 
 
