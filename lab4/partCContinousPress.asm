@@ -165,7 +165,8 @@ nextcol:							; if row scan is over
 	jmp colloop							; go to the next column
 
 convert:
-
+	ldi YL, 1
+	sts debounceValue, YL
 
 	cpi col, 3							; If the pressed key is in col.3 (column 3 has the letters)
 	breq letters							; we have a letter DO NOT HANDLE -> MAIN
@@ -177,11 +178,7 @@ convert:
 	lsl temp1							; this will multiply temp1 by 2 
 	add temp1, row						; now we have 2temp1 + temp 1 = 3temp1
 	add temp1, col						; temp1 = row*3 + col
-
-	subi temp1, -1						; Add the value of  1 since we aren't starting at 0
-;to make sure the key press is unique i will load it in and compare with whats stored, if already stored return this way the user can just hold down
-
-
+	subi temp1, -1						; Add the value of character ‘1’ since we aren't starting at 0
 	ldi XH, 10	
 	mul bottomRow, XH						; to append the number to the end (base 10 digits) we multiply by 10
 	mov bottomRow, r0
