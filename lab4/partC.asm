@@ -188,10 +188,10 @@ convert:
 	out PORTC, temp1
 
 	cpi col, 3							; If the pressed key is in col.3 (column 3 has the letters)
-	breq letters							; we have a letter DO NOT HANDLE -> MAIN
+	breq lettersjmp							; we have a letter DO NOT HANDLE -> MAIN
 	; If the key is not in col.3 and
 	cpi row, 3							; If the key is in row3, (row 3 -> symbols)
-	breq symbols						; we have a symbol or 0
+	breq symboljmp						; we have a symbol or 0
 
 	mov temp1, row						; Otherwise we have a number in 1-9
 	lsl temp1							; this will multiply temp1 by 2 
@@ -208,12 +208,21 @@ convert:
 mainjmp:
 	jmp main
 
+symboljmp:
+	jmp symbols
+
+lettersjmp:
+	jmp letters
+
 symbols:
 	cpi col, 0							; Check if we have a star
-	breq star							; if so do not handle -> MAIN
+	breq starjmp							; if so do not handle -> MAIN
 	cpi col, 1							; or if we have zero
 	breq multiply10						; multiply by 10
 	jmp main							; otherwise so we do not handle -> MAIN
+
+starjmp:
+	jmp star
 
 multiply10:
 	ldi XH, 10	
@@ -223,15 +232,22 @@ multiply10:
 
 letters:
 	cpi row, 0							;row 0 in col 3 -> A -> ADDITION
-	breq addition
+	breq adding
 	cpi row, 1
-	breq subtraction
+	breq subtracting
 	cpi row, 2
-	breq multiplication
+	breq multiply
 	cpi row, 3
 	breq division
 	jmp main
 
+adding:
+	jmp addition
+subtracting:
+	jmp subtraction
+
+multiply:
+	jmp multiplication	
 division:
 	jmp divideProper
 
@@ -257,8 +273,12 @@ subtraction:
 	jmp display
 
 
-
 multiplication:
+	cpi topRow, 1
+	brsh multiplicationalreadyexists
+	jmp addition
+
+multiplicationalreadyexists:
 ;add to the accumulated value the value on the bottom entered 
 	mul topRow, bottomRow 
 ;reset value on bottom
@@ -299,6 +319,13 @@ star:
 	jmp main
 
 divideProper:
+	cpi topRow, 1
+	brsh divisionalreadyexists
+	jmp addition
+
+divisionalreadyexists:
+    cpi bottomRow, 0
+	breq display
 	call divide8bit
 	clr bottomRow
 	do_lcd_command 0b00000001 ; clear display
@@ -538,7 +565,4 @@ sleep_15ms:
 	rcall sleep_5ms
 	rcall sleep_5ms
 	rcall sleep_5ms
-
-
-
 	ret
