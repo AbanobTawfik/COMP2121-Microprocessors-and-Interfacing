@@ -54,6 +54,12 @@
 .equ INITCOLMASK = 0xEF				; 0b1110 1111 scan from the rightmost column,
 .equ INITROWMASK = 0x01				; 0b0000 0001 scan from the top row
 .equ ROWMASK = 0x0F	
+
+.dseg
+	debounceValue:					; this will check if a key has been pressed
+		.byte 1
+.cseg
+
 .org 0
 	jmp RESET
 
@@ -97,6 +103,15 @@ RESET:
 	clr bottomRow
 
 main:
+	lds YL, debounceValue
+	cpi YL, 0
+	breq initscan
+	call sleep_50ms
+	call sleep_50ms
+	call sleep_50ms
+	ldi YL, 0
+	sts debounceValue, YL
+initscan:
 	ldi cmask, INITCOLMASK				; initial column mask
 	clr col								; initial column index = 0
 
@@ -110,7 +125,9 @@ colloop:
 delay:									; debouncer for key scan
 	dec temp1							; will be set up as pull-up resistors
 	brne delay
-	call sleep_35ms						; debouncing 10ms
+	call sleep_50ms						; debouncing 10ms
+
+
 
 	//we want to load our current cmask (column index) into temp1
 	//then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low
@@ -148,6 +165,8 @@ nextcol:							; if row scan is over
 	jmp colloop							; go to the next column
 
 convert:
+
+
 	cpi col, 3							; If the pressed key is in col.3 (column 3 has the letters)
 	breq letters							; we have a letter DO NOT HANDLE -> MAIN
 	; If the key is not in col.3 and
@@ -158,7 +177,11 @@ convert:
 	lsl temp1							; this will multiply temp1 by 2 
 	add temp1, row						; now we have 2temp1 + temp 1 = 3temp1
 	add temp1, col						; temp1 = row*3 + col
-	subi temp1, -1						; Add the value of character ‘1’ since we aren't starting at 0
+
+	subi temp1, -1						; Add the value of  1 since we aren't starting at 0
+;to make sure the key press is unique i will load it in and compare with whats stored, if already stored return this way the user can just hold down
+
+
 	ldi XH, 10	
 	mul bottomRow, XH						; to append the number to the end (base 10 digits) we multiply by 10
 	mov bottomRow, r0
@@ -447,7 +470,7 @@ sleep_5ms:
 	rcall sleep_1ms
 	rcall sleep_1ms
 	ret
-sleep_35ms:
+sleep_50ms:
 	rcall sleep_5ms
 	rcall sleep_5ms
 	rcall sleep_5ms
