@@ -58,6 +58,8 @@
 .dseg
 	debounceValue:					; this will check if a key has been pressed
 		.byte 1
+	lastPressed:
+		.byte 1
 .cseg
 
 .org 0
@@ -111,6 +113,8 @@ main:
 	call sleep_50ms
 	ldi YL, 0
 	sts debounceValue, YL
+	ldi YL, 0xe5
+	out PORTC, YL
 initscan:
 	ldi cmask, INITCOLMASK				; initial column mask
 	clr col								; initial column index = 0
@@ -125,7 +129,7 @@ colloop:
 delay:									; debouncer for key scan
 	dec temp1							; will be set up as pull-up resistors
 	brne delay
-	call sleep_50ms						; debouncing 10ms
+	call sleep_50ms						; debouncing 50ms
 
 
 
@@ -165,7 +169,11 @@ nextcol:							; if row scan is over
 	jmp colloop							; go to the next column
 
 convert:
+	lds YL, debounceValue
+	cpi YL, 0
+	brne mainjmp
 	ldi YL, 1
+	out PORTC, YL
 	sts debounceValue, YL
 
 	cpi col, 3							; If the pressed key is in col.3 (column 3 has the letters)
@@ -183,8 +191,11 @@ convert:
 	mul bottomRow, XH						; to append the number to the end (base 10 digits) we multiply by 10
 	mov bottomRow, r0
 	add bottomRow, temp1					; append the number to the end
+
 	jmp display
 
+mainjmp:
+	jmp main
 symbols:
 	cpi col, 0							; Check if we have a star
 	breq star							; if so do not handle -> MAIN
