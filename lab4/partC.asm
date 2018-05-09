@@ -78,7 +78,8 @@ RESET:
 	clr r16
 	out PORTF, r16
 	out PORTA, r16
-
+	sts lastPressed, r16
+	sts debounceValue, r16
 	;initalising output and input for the keypad
 	ldi temp1, PORTLDIR					; PA7:4/PA3:0, out/in
 	sts DDRL, temp1
@@ -86,6 +87,7 @@ RESET:
 	ser temp1							; PORTC is output
 	out DDRC, temp1
 	out PORTC, temp1
+
 	
 	;initalising the output in lcd 
 	do_lcd_command 0b00111000 ; 2x5x7
@@ -104,24 +106,19 @@ RESET:
 	clr topRow
 	clr bottomRow
 
+heldDown:
+	ldi temp1, 0
+	sts debounceValue, temp1
+	
 main:
-	lds YL, debounceValue
-	cpi YL, 0
-	breq initscan
-	call sleep_50ms
-	call sleep_50ms
-	call sleep_50ms
-	ldi YL, 0
-	sts debounceValue, YL
-	ldi YL, 0xe5
-	out PORTC, YL
-initscan:
+
 	ldi cmask, INITCOLMASK				; initial column mask
 	clr col								; initial column index = 0
 
+
 colloop:
 	cpi col, 4
-	breq main							; If all columns are scanned, go back to main.      
+	breq heldDown							; If all columns are scanned, go back to main.      
 	//PORT H -> L CAN ONLY USE STS AND LDS DO NOT SUPPORT OUT AND IN
 	sts PORTL, cmask					; Otherwise, scan the next column.
 	ldi temp1, 0xFF						; Slowing down the scan operation.
@@ -129,10 +126,22 @@ colloop:
 delay:									; debouncer for key scan
 	dec temp1							; will be set up as pull-up resistors
 	brne delay
-	call sleep_50ms						; debouncing 50ms
+	call sleep_15ms						; debouncing 50ms
+
+	lds temp1, debouncevalue
+	cpi temp1, 0
+	breq skip
+
+	ldi temp1, 1
+	sts lastPressed, temp1
+	jmp skip2
+
+skip:
+	ldi temp1, 0
+	sts lastPressed, temp1
 
 
-
+skip2:
 	//we want to load our current cmask (column index) into temp1
 	//then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low
 	//if we and them together, and get 0xf, that means we have no low rows (so we want to go to next column)
@@ -169,12 +178,14 @@ nextcol:							; if row scan is over
 	jmp colloop							; go to the next column
 
 convert:
-	lds YL, debounceValue
-	cpi YL, 0
+	ldi temp1, 1
+	sts debounceValue, temp1
+
+	lds temp1, lastPressed
+	cpi temp1, 0
 	brne mainjmp
-	ldi YL, 1
-	out PORTC, YL
-	sts debounceValue, YL
+
+	out PORTC, temp1
 
 	cpi col, 3							; If the pressed key is in col.3 (column 3 has the letters)
 	breq letters							; we have a letter DO NOT HANDLE -> MAIN
@@ -196,6 +207,7 @@ convert:
 
 mainjmp:
 	jmp main
+
 symbols:
 	cpi col, 0							; Check if we have a star
 	breq star							; if so do not handle -> MAIN
@@ -216,7 +228,12 @@ letters:
 	breq subtraction
 	cpi row, 2
 	breq multiplication
+	cpi row, 3
+	breq division
 	jmp main
+
+division:
+	jmp divideProper
 
 addition:
 	
@@ -239,16 +256,7 @@ subtraction:
 ;return to main
 	jmp display
 
-display:
-	
-	do_lcd_command 0b10000000    ; address of first line on lcd
-	do_lcd_8bit topRow
 
-	do_lcd_command 0b0011000000    ; address of second line on lcd
-	;now we want to print our bottom row register in the bottom row
-	do_lcd_8bit bottomRow
-
-	jmp main
 
 multiplication:
 ;add to the accumulated value the value on the bottom entered 
@@ -260,7 +268,16 @@ multiplication:
 ;now we want to update display
 ;return to main
 	jmp display	
+display:
+	
+	do_lcd_command 0b10000000    ; address of first line on lcd
+	do_lcd_8bit topRow
 
+	do_lcd_command 0b0011000000    ; address of second line on lcd
+	;now we want to print our bottom row register in the bottom row
+	do_lcd_8bit bottomRow
+
+	jmp main
 star:
 	;resetting the lcd
 	;initalising the output in lcd 
@@ -281,7 +298,11 @@ star:
 	clr bottomRow
 	jmp main
 
-
+divideProper:
+	call divide8bit
+	clr bottomRow
+	do_lcd_command 0b00000001 ; clear display
+	jmp display
 
 	
 /*
@@ -307,6 +328,41 @@ key value = 3*(row number+1) + (col number + 1)  since indexing starts at 0
 	cbi PORTA, @0
 .endmacro
 
+;to divide i will subtract the value of bottom row from the top row and increment that counter as long as > 0
+;then i want to store that incremented counter into top row and clear bottom row
+divide8bit:
+;pushing our values from stack to avoid overwriting
+	push temp1
+	push temp2
+	push row
+
+	ldi temp1, 0
+	mov temp2, topRow
+	mov row, bottomRow
+	cpi row, 0
+	breq endDivide2
+
+divisionPart:	
+	; taking ceiling so pre-increment, if want floor post increment
+	inc temp1
+	sub temp2, row
+	cpi temp2, 1
+	brlt endDivide
+	jmp divisionPart
+
+endDivide:
+	mov topRow, temp1
+	clr bottomRow
+	pop row
+	pop temp2
+	pop temp1
+	ret
+
+endDivide2:
+	pop row
+	pop temp2
+	pop temp1
+	ret
 
 ; 8bit digit stored in r16
 ; since 8 bit max is 255, maximum digit 100's, 10's ,1's -> NO case of 1000's
@@ -478,14 +534,11 @@ sleep_5ms:
 	rcall sleep_1ms
 	rcall sleep_1ms
 	ret
-sleep_50ms:
+sleep_15ms:
 	rcall sleep_5ms
 	rcall sleep_5ms
 	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
+
 
 
 	ret
