@@ -105,8 +105,16 @@ RESET:
 	do_lcd_data '0'
 	clr topRow
 	clr bottomRow
-
-heldDown:
+;scans through the rows n columns
+;if no key is pressed i.e full scan debounce value = 0 means last press = 0, aka no inputs
+;if a convert is performed i.e detection will set debounce flag which means key pressed so flag for ispressed is set
+;since it jumps to main instead of the held down which resets the debounce flag, it means that the flag is never reset
+;this is because it will continously detect input there from the user
+;so until a full scan is done where nothing is detected (letting go of the key scanning through all columns false)
+;it will not reset flag i.e will not take new input till user lifts finger
+;when lifts finger, scans through fully and resets the flag 
+;debounce timer of 15ms to make sure multiple inputs arent proccessed and pull up resistors are set with the delay
+eldDown:
 	ldi temp1, 0
 	sts debounceValue, temp1
 	
