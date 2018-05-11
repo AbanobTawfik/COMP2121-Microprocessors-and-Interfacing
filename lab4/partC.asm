@@ -114,7 +114,7 @@ RESET:
 ;it will not reset flag i.e will not take new input till user lifts finger
 ;when lifts finger, scans through fully and resets the flag 
 ;debounce timer of 15ms to make sure multiple inputs arent proccessed and pull up resistors are set with the delay
-eldDown:
+heldDown:
 	ldi temp1, 0
 	sts debounceValue, temp1
 	
