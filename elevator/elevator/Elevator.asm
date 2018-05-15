@@ -110,6 +110,20 @@
 		.byte 1
 	debounceTimer:
 		.byte 2
+	going_up:
+		.byte 1
+	opening:
+		.byte 1
+	closing:
+		.byte 1
+	currentFloor:
+		.byte 2
+	floor_Queue:
+		.byte 2
+	level:
+		.byte 2
+	levelInteger:
+		.byte 1
 
 .cseg
 
@@ -163,7 +177,15 @@ RESET:
 	ldi temp, 1<<TOIE0				; 128 microseconds
 	sts TIMSK0, temp				; T/C0 interrupt enable
 	sei
+	//start on floor 0 for the floor (if user presses 0, 1||1 = 1) so starting on 0
+	ldi temp, 0
+	sts low(floor_queue), temp
+	sts high(floor_queue), temp
 
+	ldi temp, 1
+	sts low(currentfloor), temp			;initally state at floor 0
+	sts high(currentfloor), temp
+	sts going_up, temp				;initally it must be going up if there is something on queue
 
 	initalise_LCD
 	jmp main
@@ -268,9 +290,8 @@ convert:
 	lsl temp1								; this will multiply temp1 by 2 
 	add temp1, row							; now we have 2temp1 + temp 1 = 3temp1
 	add temp1, col							; temp1 = row*3 + col
-	subi temp1, -1							; Add the value of  ‘1’ since we aren't starting at 0
-	add bottomRow, temp1					; append the number to the end
-
+	subi temp1, -1							; Add the value of  â€˜1â€™ since we aren't starting at 0
+	sts levelInteger, temp1					; append the number to the end
 	jmp addToQueue
 
 mainjmp:
@@ -281,22 +302,29 @@ symboljmp:
 
 
 symbols:
-	cpi col, 0							; Check if we have a star
+	cpi col, 0								; Check if we have a star
 	breq starjmp							; if so do not handle -> MAIN
-	jmp main							; otherwise so we do not handle -> MAIN
+	jmp main								; otherwise so we do not handle -> MAIN
 
 starjmp:
 	jmp star
 
 addToQueue:
+	lds XL, low(level)
+	lds XH, high(level)
+	CONVERT_FLOOR_INTEGER levelInteger, XL, XH
+	lds ZL, low(floor_Queue)
+	lds ZH, high(floor_Queue)
 
-	out portC, bottomRow
-
+	UPDATE_STATE_ADD XL,ZL,XH,ZH
+	clear level
+	clear levelInteger
 	jmp main
+
 star:
 	;resetting the lcd
 	;initalising the output in lcd 
-	initalise_LCD
+	initalise_LCD 
 
 
 	clr topRow
