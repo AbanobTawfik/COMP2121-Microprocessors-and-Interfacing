@@ -52,6 +52,33 @@
 	rcall lcd_wait
 .endmacro
 
+.macro PRINT_EMERGENCY
+	prologue
+	initalise_LCD
+
+	do_lcd_command 0b10000000    ; address of first line on lcd
+	do_lcd_data 'E'
+	do_lcd_data 'm'
+	do_lcd_data 'e'
+	do_lcd_data 'r'
+	do_lcd_data 'g'
+	do_lcd_data 'e'
+	do_lcd_data 'n'
+	do_lcd_data 'c'
+	do_lcd_data 'y'
+	do_lcd_command 0b0011000000
+	do_lcd_data 'c'
+	do_lcd_data 'a'
+	do_lcd_data 'l'
+	do_lcd_data 'l'
+	do_lcd_data ' '
+	do_lcd_data ' '
+	do_lcd_data '0'
+	do_lcd_data '0'
+	do_lcd_data '0'
+	epilogue
+.endmacro
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //																																						 //
 //													This is the main body of code																		 //
@@ -124,6 +151,8 @@
 		.byte 2
 	levelInteger:
 		.byte 1
+	emergency:
+		.byte 1
 
 .cseg
 
@@ -181,6 +210,7 @@ RESET:
 	ldi temp, 0
 	sts low(floor_queue), temp
 	sts high(floor_queue), temp
+	sts lastPressed, temp
 
 	ldi temp, 1
 	sts low(currentfloor), temp			;initally state at floor 0
@@ -202,29 +232,29 @@ RESET:
 heldDown:
 	ldi temp1, 0
 	sts debounceValue, temp1
+
 	
 main:
-
 	ldi cmask, INITCOLMASK				; initial column mask
 	clr col								; initial column index = 0
 
-
 colloop:
+
 	cpi col, 4
-	breq heldDown							; If all columns are scanned, go back to main.      
+	breq heldDown							; If all columns are scanned, go back to main.    
+
 	//PORT H -> L CAN ONLY USE STS AND LDS DO NOT SUPPORT OUT AND IN
 	sts PORTL, cmask					; Otherwise, scan the next column.
 	ldi temp1, 0xFF						; Slowing down the scan operation.
 
-delay:									; debouncer for key scan
+delay:	
+										; debouncer for key scan
 	dec temp1							; will be set up as pull-up resistors
 	brne delay
 	call sleep_15ms						; debouncing 50ms
-
 	lds temp1, debouncevalue
 	cpi temp1, 0
 	breq skip
-
 	ldi temp1, 1
 	sts lastPressed, temp1
 	jmp skip2
@@ -278,7 +308,6 @@ convert:
 	cpi temp1, 0
 	brne mainjmp
 
-	out PORTC, temp1
 
 	cpi col, 3								; If the pressed key is in col.3 (column 3 has the letters)
 	breq mainjmp							; we have a letter DO NOT HANDLE -> MAIN
@@ -304,31 +333,48 @@ symboljmp:
 symbols:
 	cpi col, 0								; Check if we have a star
 	breq starjmp							; if so do not handle -> MAIN
+	cpi col, 1
+	breq zerojmp
 	jmp main								; otherwise so we do not handle -> MAIN
 
 starjmp:
 	jmp star
-
+zerojmp:
+	jmp zero
 addToQueue:
+
 	lds XL, low(level)
 	lds XH, high(level)
-	CONVERT_FLOOR_INTEGER levelInteger, XL, XH
+	;CONVERT_FLOOR_INTEGER levelInteger, XL, XH
 	lds ZL, low(floor_Queue)
 	lds ZH, high(floor_Queue)
-
-	UPDATE_STATE_ADD XL,ZL,XH,ZH
+	;UPDATE_STATE_ADD XL,ZL,XH,ZH
 	clear level
 	clear levelInteger
+	out portC, temp1
 	jmp main
+
+zero:
+	ldi temp1, 0
+	sts level, temp1
+	jmp addtoQueue
 
 star:
 	;resetting the lcd
 	;initalising the output in lcd 
 	initalise_LCD 
+	lds temp, emergency
+	cpi temp, 0
+	breq emergency_ON
+	;emergency off
+	ldi temp, 0
+	sts emergency, temp
+	jmp main
+	emergency_ON:
+	;want to set emergency flag on
+	ldi temp, 0xFF
+	sts emergency, temp
 
-
-	clr topRow
-	clr bottomRow
 	jmp main
 
 
@@ -431,6 +477,9 @@ sleep_15ms:
 //																																						 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+DEFAULT:	
+	
+
 PB1_ON_PRESS:
 ;  PROLOGUE
 	prologue
@@ -470,12 +519,7 @@ pb0Epilogue:
 Timer0OVF:
 ;storing onto the stack the values we want to preserve and conflict registers
 ;  PROLOGUE
-	in temp, SREG
-	push temp
-	push YH
-	push YL
-	push r25
-	push r24
+	prologue
 	;button debouncing ~100 ms since 7812 = 1 second, 25 ms = 7812/1000 * 100 
 ;if the buttons status is on we want to start counter to reset it
 	lds temp, debounceRightStatus
@@ -526,12 +570,5 @@ NotSecond:
 	jmp TimerEpilogue
 
 timerEpilogue:
-	;epilogue
-	pop r24
-	pop r25
-	pop YL
-	pop YH
-	pop temp
-	;restore our SREG especially xD
-	out SREG, temp
+	epilogue
 	reti
