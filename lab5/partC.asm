@@ -49,10 +49,10 @@
 .def temp1 = r20
 .def temp2 = r21
 .def topRow = r22
-.def bottomRow = r23
+.def rotations = r17
 .def numberSize = r18
 .def flag = r19
-.def init = r17
+.def init = r23
 
 .dseg
 	debounceLeftStatus:
@@ -110,14 +110,6 @@ RESET:
 	ldi temp1, (1<< WGM30)|(1<<COM3B1)
 	sts TCCR3A, temp1
 	
-	ldi temp1, (2 << ISC20)
-	;set the external interrupt control register A to trigger for INT2
-	;we chose EICRA because it handles for INT0-INT3
-	sts EICRA, temp1
-	;now we want to enable int2
-	in temp1, EIMSK
-	ori temp1, (1 <<INT2)
-	out EIMSK, temp1
 
 	ldi temp1, 0b00000000
 	out TCCR0A, temp1
@@ -126,13 +118,13 @@ RESET:
 	ldi temp1, 1<<TOIE0				; 128 microseconds
 	sts TIMSK0, temp1				; T/C0 interrupt enable
 	;now for the important part is sent INT1 and INT0 to trigger on falling edges for external interupt
-	ldi temp, (1 << ISC11) | (1 << ISC01)
+	ldi temp, (1 << ISC11) | (1 << ISC01) | (2 <<ISC20)
 	;set the external interrupt control register A to trigger for INT0 and INT1
 	;we chose EICRA because it handles for INT0-INT3
 	sts EICRA, temp
 	;now we want to enable int0 and int1
 	in temp, EIMSK
-	ori temp, (1 <<INT0) | (1 << INT1)
+	ori temp, (1 <<INT0) | (1 << INT1) | (1<<INT2)
 	out EIMSK, temp
 	;initalising the output in lcd 
 	do_lcd_command 0b00111000 ; 2x5x7
@@ -166,18 +158,10 @@ RESET:
 	do_lcd_data '0'
 
 	clr topRow
-	clr bottomRow
+	clr rotations
 	sei
 loop: jmp loop
 
-
-INTERRUPT2:
-	in temp1, SREG
-	push temp1
-	inc bottomRow
-	pop temp1
-	out SREG, temp1
-	reti
 ;scans through the rows n columns
 ;if no key is pressed i.e full scan debounce value = 0 means last press = 0, aka no inputs
 ;if a convert is performed i.e detection will set debounce flag which means key pressed so flag for ispressed is set
@@ -211,8 +195,8 @@ display:
 	do_lcd_data 'n'
 	do_lcd_data 't'
 	do_lcd_data ':'
-	do_lcd_8bit bottomRow
-	clr bottomRow
+	do_lcd_8bit rotations
+	clr rotations
 	ret
 
 
@@ -418,6 +402,14 @@ sleep_15ms:
 	ret
 
 
+INTERRUPT2:
+	in temp1, SREG
+	push temp1
+	inc rotations
+	pop temp1
+	out SREG, temp1
+	reti
+
 Timer0OVF:
 ;storing onto the stack the values we want to preserve and conflict registers
 ;  PROLOGUE
@@ -429,6 +421,7 @@ Timer0OVF:
 	push r24
 	;button debouncing ~100 ms since 7812 = 1 second, 25 ms = 7812/1000 * 100 
 ;if the buttons status is on we want to start counter to reset it
+
 	lds temp, debounceRightStatus
 	cpi temp, 0
 	breq debounceTime
@@ -459,16 +452,16 @@ debounceStatusSkip:
 	lds r24, tempCounter
 	lds r25, tempCounter+1
 	adiw r25:r24, 1			;increment the register pair
-	cpi r24, low(700)		;check if the register pair (r25:r24) = 7812
-	ldi temp, high(700)
+	cpi r24, low(2000)		;check if the register pair (r25:r24) = 7812
+	ldi temp, high(2000)
 	cpc r25, temp
 	brne NotSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	out portC, rotations
 	clear tempCounter
 	ldi r24, 0
 	sts tempCounter, r24
 	sts tempCounter+1, r24
 	rcall display	
-	clr bottomRow
 	jmp TimerEpilogue
 
 NotSecond:
@@ -507,6 +500,7 @@ PB1_ON_PRESS:
 	brsh pb0epilogue
 	subi topRow, -20
 	sts OCR3BL, topRow
+	
 
 
 pb1Epilogue:
@@ -548,4 +542,3 @@ pb0Epilogue:
 	;restore our SREG especially xD
 	out SREG, temp
 	reti	
-
