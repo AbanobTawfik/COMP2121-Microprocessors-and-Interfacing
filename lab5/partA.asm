@@ -103,7 +103,7 @@ RESET:
 	do_lcd_data 'S'
 	do_lcd_data ':'
 
-	ldi temp1, (2 << ISC20)
+	ldi temp1, (1 << ISC20)
 	;set the external interrupt control register A to trigger for INT2
 	;we chose EICRA because it handles for INT0-INT3
 	sts EICRA, temp1
