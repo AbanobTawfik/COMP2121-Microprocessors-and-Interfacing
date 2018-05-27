@@ -32,6 +32,38 @@
 	 do_lcd_data 'i'
 	 do_lcd_data 'f'
 	 do_lcd_data 't'
+	do_lcd_command 0b0011000000    ; address of second line on lcd
+	do_lcd_data 'f'
+	do_lcd_data 'l'
+	do_lcd_data 'o'
+	do_lcd_data 'o'
+	do_lcd_data 'r'
+	do_lcd_data ':'
+	do_lcd_data ' '
+	do_lcd_data '0'
+.endmacro
+
+.macro PRINT_FLOOR
+	 do_lcd_command 0b00000001 ; clear display
+	 do_lcd_command 0b00000110 ; increment, no display shift
+	 do_lcd_command 0b00001110 ; Cursor on, bar, no blink
+	 do_lcd_data ' '
+	 do_lcd_data ' '
+	 do_lcd_data ' '
+	 do_lcd_data ' '
+	 do_lcd_data ' '
+	 do_lcd_data 'L'
+	 do_lcd_data 'i'
+	 do_lcd_data 'f'
+	 do_lcd_data 't'
+	 do_lcd_command 0b0011000000    ; address of second line on lcd
+	 do_lcd_data 'f'
+	 do_lcd_data 'l'
+	 do_lcd_data 'o'
+ 	 do_lcd_data 'o'
+	 do_lcd_data 'r'
+	 do_lcd_data ':'
+	 do_lcd_data ' '
 .endmacro
 
  .macro do_lcd_command
@@ -54,7 +86,7 @@
 
 .macro PRINT_EMERGENCY
 	prologue
-	initalise_LCD
+	do_lcd_command 0b00000001 ; clear display
 
 	do_lcd_command 0b10000000    ; address of first line on lcd
 	do_lcd_data 'E'
@@ -71,7 +103,7 @@
 	do_lcd_data 'a'
 	do_lcd_data 'l'
 	do_lcd_data 'l'
-	do_lcd_data ' '
+	do_lcd_data ':'
 	do_lcd_data ' '
 	do_lcd_data '0'
 	do_lcd_data '0'
@@ -125,10 +157,8 @@
 		.byte 1
 	lastPressed:
 		.byte 1
-	patternState:
-		.byte 1				;single 8 byte pattern to show
-	secondCounter:			;3 flashes 1s each so when this second counter is 3 we reset, and overwrite pattern with new 1
-		.byte 2
+	secondCounter:
+		.byte 1
 	tempCounter:			;used to check if a second has passed
 		.byte 2
 	debounceLeftStatus:
@@ -137,20 +167,14 @@
 		.byte 1
 	debounceTimer:
 		.byte 2
-	going_up:
-		.byte 1
 	opening:
 		.byte 1
 	closing:
 		.byte 1
 	currentFloor:
-		.byte 2
+		.byte 1
 	floor_Queue:
 		.byte 2
-	level:
-		.byte 2
-	levelInteger:
-		.byte 1
 	emergency:
 		.byte 1
 
@@ -208,16 +232,32 @@ RESET:
 	sei
 	//start on floor 0 for the floor (if user presses 0, 1||1 = 1) so starting on 0
 	ldi temp, 0
-	sts low(floor_queue), temp
-	sts high(floor_queue), temp
 	sts lastPressed, temp
+	clear floor_Queue
 
-	ldi temp, 1
-	sts low(currentfloor), temp			;initally state at floor 0
-	sts high(currentfloor), temp
-	sts going_up, temp				;initally it must be going up if there is something on queue
+	ldi temp, 0
+	sts currentFloor, temp
 
 	initalise_LCD
+
+	;setup strobe light + motor
+		;this is PE2 because from some reason its PE4???????????????????????????
+	ldi temp1, 0xff
+	;motor + strobe as output
+	out DDRE, temp1
+	;show the red LED
+	ldi temp1, 0xFF
+	out portE, temp1
+	out DDRC, temp1
+	ldi temp1, 0
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	ldi temp1, (1 << CS30) 		; set the Timer3 to Phase Correct PWM mode. 
+	sts TCCR3B, temp1
+	ldi temp1, (1<< WGM30)|(1<<COM3B1)
+	sts TCCR3A, temp1
+
 	jmp main
 
 ;scans through the rows n columns
@@ -320,7 +360,6 @@ convert:
 	add temp1, row							; now we have 2temp1 + temp 1 = 3temp1
 	add temp1, col							; temp1 = row*3 + col
 	subi temp1, -1							; Add the value of  ‘1’ since we aren't starting at 0
-	sts levelInteger, temp1					; append the number to the end
 	jmp addToQueue
 
 mainjmp:
@@ -342,21 +381,24 @@ starjmp:
 zerojmp:
 	jmp zero
 addToQueue:
+	ldi XL, 1
+	ldi XH, 0 
 
-	lds XL, low(level)
-	lds XH, high(level)
-	;CONVERT_FLOOR_INTEGER levelInteger, XL, XH
-	lds ZL, low(floor_Queue)
-	lds ZH, high(floor_Queue)
-	;UPDATE_STATE_ADD XL,ZL,XH,ZH
-	clear level
-	clear levelInteger
-	out portC, temp1
+	CONVERT_FLOOR_INTEGER temp1, XL, XH
+
+	
+	lds ZL, floor_Queue
+	lds ZH, floor_Queue + 1	
+
+
+	UPDATE_STATE_ADD ZL,XL,ZH,XH
+	sts floor_Queue, ZL
+	sts floor_Queue+1,ZH
+
 	jmp main
 
 zero:
 	ldi temp1, 0
-	sts level, temp1
 	jmp addtoQueue
 
 star:
@@ -464,13 +506,49 @@ sleep_5ms:
 	rcall sleep_1ms
 	rcall sleep_1ms
 	ret
+
 sleep_15ms:
 	rcall sleep_5ms
 	rcall sleep_5ms
 	rcall sleep_5ms
 	ret
 
+sleep_50ms:
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	rcall sleep_5ms
 
+	ret
+
+sleep_200ms:
+	rcall sleep_50ms
+	rcall sleep_50ms
+	rcall sleep_50ms
+	rcall sleep_50ms
+	ret
+
+sleep_1s:
+    rcall sleep_200ms
+	rcall sleep_200ms
+	rcall sleep_200ms
+	rcall sleep_200ms
+	rcall sleep_200ms
+	ret
+sleep_2s:
+	rcall sleep_1s
+	rcall sleep_1s
+	ret
+sleep_3s:
+	rcall sleep_2s
+	rcall sleep_1s
+	ret
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //																																						 //
 //													These are interrupt handlers																		 //
@@ -555,20 +633,137 @@ debounceStatusSkip:
 	cpi r24, low(7812)		;check if the register pair (r25:r24) = 7812
 	ldi temp, high(7812)
 	cpc r25, temp
-	brne NotSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	breq isSecond			;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
+	jmp notSecond
+isSecond:
 	clear tempCounter
 	ldi r24, 0
 	sts tempCounter, r24
 	sts tempCounter+1, r24
-	
+	lds temp1, secondCounter
+	inc temp1					;increment the amount of seconds passed
+	sts secondCounter, temp1
+	PRINT_FLOOR
+	lds temp, currentFloor
+	sts currentFloor, temp
+	;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
+	lds r24, floor_queue
+	lds r25, floor_queue+1		;checking if the queue is empty
+	cpi r24, 0
+	ldi temp, 0
+	cpc temp, r25
+	breq somethinginQueue			;if nothing is in the queue we just want to return!
+	jmp nothinginQueue
+	somethinginQueue:
+	;otherwise we want to check the current queue and see which direction we are travelling in
+	;if there is stuff on the queue now we want to know which direction the lift will travel in
+	;we want to compare the CURRENT FLOOR to the queue in a way to check if it is moving up or down with the current 
+	;queue setup. since the queue is setup like 0b0000000000000000 and 1 = on queue 0 = not on queue
+	;we are comparing the current floor to the queue in the following way
+	;take the value of queue - current floor
+	;IF the returned value is greater than current floor -> move up
+	;otherwise move down
+	; this is because if we have for example floor 1 3 5 and are on floor 3 we have this
+	; 0b010101 and floor 3 has value 8, floor 1 has value 2 and floor 5 has value 32
+	;that means value of queue = 42, value of current floor = 8
+	;using our algorithm, 42-8 > 8, therefore move up
+	;however say floor 5 wasnt there, and 1 3 on floor 3, 
+	; queue = 10, current floor = 8
+	; 10-8 < 8 so move down!
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds temp1, floor_Queue
+	lds temp2, floor_Queue + 1
+	out portC, temp1
+	sub temp1, XL
+	sub temp2, XH
+	cp temp1, XL
+	cpc temp2, XH
+	brlo moveDown
+	jmp moveUp
 
-
+moveDown:
+	;move up the floors checking if a floor is in the queue
+	;first check if the CURRENT FLOOR IS ON QUEUE
+	;IF IT IS call the open door function
+	;return from open if called
+	;delay for 2s between floors.
+	;increment current floor by 1
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds temp1, floor_Queue
+	lds temp2, floor_Queue + 1
+	and temp1, XL
+	and temp2, XH
+	cpi temp1, 0
+	ldi temp, 0
+	cpc temp2, temp
+	breq ignoredown
+	;in here we will update the queue by removing the current floor
+	rcall OPEN_DOOR
+	ignoredown:
+	;after regardless of return we sleep for 2s
+	rcall sleep_2s
+	PRINT_FLOOR
+	lds temp, currentFloor
+	dec temp
+	sts currentFloor, temp
+	do_lcd_data_in_register temp
+moveUp:
+	;move up the floors checking if a floor is in the queue
+	;first check if the CURRENT FLOOR IS ON QUEUE
+	;IF IT IS call the open door function
+	;return from open if called
+	;delay for 2s between floors.
+	;increment current floor by 1
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds temp1, floor_Queue
+	lds temp2, floor_Queue + 1
+	and temp1, XL
+	and temp2, XH
+	cpi temp1, 0
+	ldi temp, 0
+	cpc temp2, temp
+	breq ignoreup
+	;in here we will update the queue by removing the current floor
+	rcall OPEN_DOOR
+	ignoreup:
+	;after regardless of return we sleep for 2s
+	rcall sleep_2s
+	PRINT_FLOOR
+	lds temp, currentFloor
+	inc temp
+	sts currentFloor, temp
+	do_lcd_data_in_register temp
 
 NotSecond:
 	sts TempCounter, r24		;update the value of the temporary counter
 	sts TempCounter+1, r25	
 	jmp TimerEpilogue
 
+nothinginQueue:
+	
 timerEpilogue:
 	epilogue
 	reti
+
+OPEN_DOOR:
+	prologue
+
+	;first we want to update the queue
+	
+	epilogue
+	ret
