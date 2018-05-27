@@ -296,7 +296,7 @@ delay:
 										; debouncer for key scan
 	dec temp1							; will be set up as pull-up resistors
 	brne delay
-	call sleep_15ms						; debouncing 50ms
+	call sleep_1ms						; debouncing 50ms
 	lds temp1, debouncevalue
 	cpi temp1, 0
 	breq skip
@@ -399,6 +399,7 @@ addToQueue:
 	UPDATE_STATE_ADD ZL,XL,ZH,XH
 	sts floor_Queue, ZL
 	sts floor_Queue+1,ZH
+	;out portC, Z
 	jmp main
 
 zero:
@@ -678,12 +679,10 @@ isSecond:
 	;queue is in r24:r25 we want a copy of it for our subtraction
 	lds temp1, floor_Queue
 	lds temp2, floor_Queue + 1
-
-	sub temp1, XL
-	sub temp2, XH
+	out portC, temp1
 	cp temp1, XL
 	cpc temp2, XH
-	brsh moveDown
+	brlo moveDown
 	;now the second check to change direction
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
@@ -693,7 +692,7 @@ isSecond:
 	;queue is in r24:r25 we want a copy of it for our subtraction
 	lds temp1, floor_Queue
 	lds temp2, floor_Queue + 1
-	sbiw XL:XH, 1
+	sbiw XH:XL, 1
 	and XL, temp1
 	and XH, temp2
 	cpi XL, 0
@@ -718,7 +717,7 @@ moveUp:
 
 continue:
 	lds temp, down
-	cpi temp, 0
+	cpi temp, 1
 	breq continueDown
 	;otherwise move up
 	jmp continueUp
@@ -749,8 +748,8 @@ continueDown:
 	;after regardless of return we sleep for 2s
 	rcall sleep_2s
 	lds temp, currentFloor
-	PRINT_FLOOR temp
 	dec temp
+	PRINT_FLOOR temp
 	sts currentFloor, temp
 	;do_lcd_data_in_register temp
 	jmp timerEpilogue
@@ -800,7 +799,38 @@ timerEpilogue:
 OPEN_DOOR:
 	prologue
 
-	;first we want to update the queue
-	
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	lds ZL, floor_Queue
+	lds ZH, floor_Queue + 1	
+	UPDATE_STATE_REMOVE ZL,XL,ZH,XH
+	sts floor_Queue, ZL
+	sts floor_Queue+1,ZH
+	ldi temp1, 0xff
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	rcall sleep_1s
+	;motor spins for 1s then off
+	ldi temp1, 0
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	;now want to wait 3s before closing door
+	rcall sleep_3s
+	;turn motor on to signal door closing for 1s
+	ldi temp1, 0xff
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	rcall sleep_1s
+	;turn motor off and return
+	ldi temp1, 0
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
 	epilogue
 	ret
