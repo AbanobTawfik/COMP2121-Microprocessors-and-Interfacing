@@ -64,6 +64,10 @@
 	 do_lcd_data 'r'
 	 do_lcd_data ':'
 	 do_lcd_data ' '
+	 mov r16, @0
+	 subi r16, -'0'
+	 rcall lcd_data
+	 rcall lcd_wait
 .endmacro
 
  .macro do_lcd_command
@@ -177,6 +181,8 @@
 		.byte 2
 	emergency:
 		.byte 1
+	down:
+		.byte 1
 
 .cseg
 
@@ -210,7 +216,6 @@ RESET:
 	//will make portC output 0xff
 	ser temp1							; PORTC is output
 	out DDRC, temp1
-	out PORTC, temp1
 	;now for the important part is sent INT1 and INT0 to trigger on falling edges for external interupt
 	ldi temp, (1 << ISC11) | (1 << ISC01)
 	;set the external interrupt control register A to trigger for INT0 and INT1
@@ -225,7 +230,7 @@ RESET:
 	sts debounceLeftStatus, temp 
 	ldi temp, 0b00000000
 	out TCCR0A, temp
-	ldi temp, 0b00000010
+	ldi temp, 0b00000100
 	out TCCR0B, temp				; prescalining = 8
 	ldi temp, 1<<TOIE0				; 128 microseconds
 	sts TIMSK0, temp				; T/C0 interrupt enable
@@ -257,7 +262,7 @@ RESET:
 	sts TCCR3B, temp1
 	ldi temp1, (1<< WGM30)|(1<<COM3B1)
 	sts TCCR3A, temp1
-
+	ldi temp1, 12
 	jmp main
 
 ;scans through the rows n columns
@@ -394,7 +399,6 @@ addToQueue:
 	UPDATE_STATE_ADD ZL,XL,ZH,XH
 	sts floor_Queue, ZL
 	sts floor_Queue+1,ZH
-
 	jmp main
 
 zero:
@@ -567,11 +571,8 @@ PB1_ON_PRESS:
 	brne pb1epilogue				;the status will be on 10ms after button is pressed
 	ldi temp, 0						;now it will be off so after 100ms will be set on again
 	sts debounceRightStatus, temp   
-	;out portC, temp
 	breq pb1epilogue
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
-
-;	out PORTC, temp
 
 pb1Epilogue:
 	;epilogue
@@ -643,33 +644,32 @@ isSecond:
 	lds temp1, secondCounter
 	inc temp1					;increment the amount of seconds passed
 	sts secondCounter, temp1
-	PRINT_FLOOR
 	lds temp, currentFloor
 	sts currentFloor, temp
+	PRINT_FLOOR temp
+;		lds temp, floor_queue + 1
+;	out portC, temp
 	;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
 	lds r24, floor_queue
 	lds r25, floor_queue+1		;checking if the queue is empty
 	cpi r24, 0
 	ldi temp, 0
 	cpc temp, r25
-	breq somethinginQueue			;if nothing is in the queue we just want to return!
+	brne somethinginQueue			;if nothing is in the queue we just want to return!
 	jmp nothinginQueue
 	somethinginQueue:
 	;otherwise we want to check the current queue and see which direction we are travelling in
 	;if there is stuff on the queue now we want to know which direction the lift will travel in
 	;we want to compare the CURRENT FLOOR to the queue in a way to check if it is moving up or down with the current 
-	;queue setup. since the queue is setup like 0b0000000000000000 and 1 = on queue 0 = not on queue
-	;we are comparing the current floor to the queue in the following way
-	;take the value of queue - current floor
-	;IF the returned value is greater than current floor -> move up
-	;otherwise move down
-	; this is because if we have for example floor 1 3 5 and are on floor 3 we have this
-	; 0b010101 and floor 3 has value 8, floor 1 has value 2 and floor 5 has value 32
-	;that means value of queue = 42, value of current floor = 8
-	;using our algorithm, 42-8 > 8, therefore move up
-	;however say floor 5 wasnt there, and 1 3 on floor 3, 
-	; queue = 10, current floor = 8
-	; 10-8 < 8 so move down!
+	;the movement of the elevator is simple
+	;it will move up all the way till it reaches the top floor
+	;then move down all the way till it reaches thw lowest floor, taking floors off the queue on its way
+	;to check if we are at the top, we can simply just check if the current floor in bits
+	;is higher than the entire queue, since 0b11111110 < 0b00000001
+	;now to check if we are at the bottom we simply want to subtract 1 from the queue
+	;and AND, if the result is = 0 -> no floors below move up
+	;otherwise continue in direction
+
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
@@ -678,15 +678,51 @@ isSecond:
 	;queue is in r24:r25 we want a copy of it for our subtraction
 	lds temp1, floor_Queue
 	lds temp2, floor_Queue + 1
-	out portC, temp1
+
 	sub temp1, XL
 	sub temp2, XH
 	cp temp1, XL
 	cpc temp2, XH
-	brlo moveDown
+	brsh moveDown
+	;now the second check to change direction
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds temp1, floor_Queue
+	lds temp2, floor_Queue + 1
+	sbiw XL:XH, 1
+	and XL, temp1
+	and XH, temp2
+	cpi XL, 0
+	ldi temp, 0
+	cpc XH, temp
+	;if its = 0 that means direction is up as there are no lower floors
+	brne anotherSkip
 	jmp moveUp
+	anotherSkip:
+	jmp continue
 
 moveDown:
+	;set direction to be down so down == trye
+	ldi temp, 1
+	sts down, temp
+	jmp continue
+moveUp:
+	;set direction to be up so down == false
+	ldi temp, 0
+	sts down, temp
+	jmp continue
+
+continue:
+	lds temp, down
+	cpi temp, 0
+	breq continueDown
+	;otherwise move up
+	jmp continueUp
+continueDown:
 	;move up the floors checking if a floor is in the queue
 	;first check if the CURRENT FLOOR IS ON QUEUE
 	;IF IT IS call the open door function
@@ -712,13 +748,14 @@ moveDown:
 	ignoredown:
 	;after regardless of return we sleep for 2s
 	rcall sleep_2s
-	PRINT_FLOOR
 	lds temp, currentFloor
+	PRINT_FLOOR temp
 	dec temp
 	sts currentFloor, temp
-	do_lcd_data_in_register temp
-moveUp:
-	;move up the floors checking if a floor is in the queue
+	;do_lcd_data_in_register temp
+	jmp timerEpilogue
+continueUp:
+;move up the floors checking if a floor is in the queue
 	;first check if the CURRENT FLOOR IS ON QUEUE
 	;IF IT IS call the open door function
 	;return from open if called
@@ -743,19 +780,19 @@ moveUp:
 	ignoreup:
 	;after regardless of return we sleep for 2s
 	rcall sleep_2s
-	PRINT_FLOOR
-	lds temp, currentFloor
+	lds temp, currentFloor	
+	PRINT_FLOOR temp
 	inc temp
 	sts currentFloor, temp
-	do_lcd_data_in_register temp
-
+	;do_lcd_data_in_register temp
+	jmp timerEpilogue	
 NotSecond:
 	sts TempCounter, r24		;update the value of the temporary counter
 	sts TempCounter+1, r25	
 	jmp TimerEpilogue
 
 nothinginQueue:
-	
+	jmp timerEpilogue
 timerEpilogue:
 	epilogue
 	reti
