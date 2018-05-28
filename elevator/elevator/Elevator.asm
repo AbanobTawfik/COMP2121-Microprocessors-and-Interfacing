@@ -182,6 +182,8 @@
 		.byte 1
 	canClose:
 		.byte 1
+	emergencyShown:
+		.byte 1
 .cseg
 .org 0
 	jmp RESET
@@ -236,10 +238,12 @@ RESET:
 	ldi temp, 0
 	sts lastPressed, temp
 	clear floor_Queue
-
+	ldi temp, 0b000010
+	out portA, temp
 	ldi temp, 0
 	sts currentFloor, temp
-
+	sts emergency, temp
+	sts emergencyshown, temp
 	initalise_LCD
 
 	;setup strobe light + motor
@@ -273,17 +277,14 @@ RESET:
 heldDown:
 	ldi temp1, 0
 	sts debounceValue, temp1
-
 	
 main:
 	ldi cmask, INITCOLMASK				; initial column mask
 	clr col								; initial column index = 0
 
 colloop:
-
 	cpi col, 4
 	breq heldDown							; If all columns are scanned, go back to main.    
-
 	//PORT H -> L CAN ONLY USE STS AND LDS DO NOT SUPPORT OUT AND IN
 	sts PORTL, cmask					; Otherwise, scan the next column.
 	ldi temp1, 0xFF						; Slowing down the scan operation.
@@ -382,6 +383,11 @@ starjmp:
 zerojmp:
 	jmp zero
 addToQueue:
+	lds temp, emergency
+	cpi temp, 1
+	brne justAdd
+	jmp main
+justAdd:
 	ldi XL, 1
 	ldi XH, 0 
 
@@ -405,7 +411,6 @@ zero:
 star:
 	;resetting the lcd
 	;initalising the output in lcd 
-	initalise_LCD 
 	lds temp, emergency
 	cpi temp, 0
 	breq emergency_ON
@@ -415,9 +420,27 @@ star:
 	jmp main
 	emergency_ON:
 	;want to set emergency flag on
-	ldi temp, 0xFF
+	ldi temp, 1
 	sts emergency, temp
-
+	lds temp, canClose
+	cpi temp, 0
+	breq nothingToRemove
+	rcall forceClose
+	nothingToRemove:
+	ldi temp, 0
+	sts floor_Queue, temp
+	sts floor_Queue + 1, temp
+	;clear queue and go to floor 0
+	ldi temp, 0
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds ZL, floor_Queue
+	lds ZH, floor_Queue + 1	
+	UPDATE_STATE_ADD ZL,XL,ZH,XH
+	sts floor_Queue, ZL
+	sts floor_Queue+1,ZH
 	jmp main
 
 
@@ -513,6 +536,28 @@ sleep_15ms:
 	rcall sleep_5ms
 	rcall sleep_5ms
 	ret
+sleep_100ms:
+	rcall sleep_15ms
+	rcall sleep_15ms
+	rcall sleep_15ms
+	rcall sleep_15ms
+	rcall sleep_15ms
+	rcall sleep_15ms
+	rcall sleep_5ms
+	rcall sleep_5ms
+	ret
+sleep_1s:
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	rcall sleep_100ms
+	ret
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //																																						 //
@@ -605,10 +650,26 @@ isSecond:
 	lds temp1, secondCounter
 	inc temp1					;increment the amount of seconds passed
 	sts secondCounter, temp1
+	lds temp, emergencyshown
+	cpi temp, 1
+	breq showEmergency2
+	jmp skipEmergencyDisplay
+	showEmergency2:
+		PRINT_EMERGENCY
+		lds temp, emergency
+		cpi temp, 0
+		breq reset_emergency
+		jmp afterprint
+		reset_emergency:
+			ldi temp, 0
+			sts emergencyShown, temp
+		jmp afterPrint
+	skipEmergencyDisplay:
 	lds temp, currentFloor
 	sts currentFloor, temp
 	PRINT_FLOOR temp
 	;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
+	AfterPrint:
 	lds r24, floor_queue
 	lds r25, floor_queue+1		;checking if the queue is empty
 	cpi r24, 0
@@ -870,6 +931,51 @@ OPEN_DOOR:
 	brsh closed
 	jmp TimerEpilogue	
 	closed:
+	ldi temp1, 0
+	;turn motor off and return
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	sts secondCounter, temp1
+	sts closing, temp1
+	sts timeOfClose, temp1
+	sts alreadyClosing, temp1
+	sts canClose, temp1
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	lds ZL, floor_Queue
+	lds ZH, floor_Queue + 1	
+	eor ZL,XL 
+	eor ZH,XH
+	sts floor_Queue, ZL
+	sts floor_Queue+1,ZH
+	lds temp, emergency
+	cpi temp, 1
+	breq showDisplay
+	jmp skipDisplay
+	showDisplay:
+	ldi temp, 1
+	sts emergencyshown, temp
+	PRINT_EMERGENCY
+	epilogue
+	ret
+	skipDisplay:
+
+	epilogue
+	ret
+
+forceClose:
+	prologue
+	ldi temp1, 0xff
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1	
+	rcall sleep_1s
+	rcall sleep_1s
+	ldi temp1, DOOR_CLOSED
+	out portC, temp1
 	ldi temp1, 0
 	;turn motor off and return
 	;initialise voltage to max
