@@ -139,22 +139,15 @@
 .equ INITROWMASK = 0x01				; 0b0000 0001 scan from the top row
 .equ ROWMASK = 0x0F	
 
-;flag for motor on
-.equ MOT_ON = 1
-;flag for motor off
-.equ MOT_OFF = 0
-;these are to signify the maximum and minimum floor
-.equ TOP_FLOOR = 9
-.equ BOTTOM_FLOOR = 0
 ;LED PATTERNS
 ;door open is 0b11000011 supposed to look like open space for door
 .equ DOOR_OPEN = 0xC3
 ;door closed is 0b11101111 the 0 in middle is the gap for door
-.equ DOOR_CLOSED = 0xF7
+.equ DOOR_CLOSED = 0xE7
 ;door moving up 0b00001111
-.equ MOVING_UP = 0x0F
+.equ MOVING_UP = 0xF0
 ;door moving down 0b11110000
-.equ MOVING_DOWN = 0xF0
+.equ MOVING_DOWN = 0x0F
 
 .dseg
 	debounceValue:					; this will check if a key has been pressed
@@ -646,10 +639,7 @@ isSecond:
 	sts secondCounter, temp1
 	lds temp, currentFloor
 	sts currentFloor, temp
-	out portC, temp
 	PRINT_FLOOR temp
-;	lds temp, floor_queue + 1
-;	out portC, temp
 	;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
 	lds r24, floor_queue
 	lds r25, floor_queue+1		;checking if the queue is empty
@@ -670,7 +660,6 @@ isSecond:
 	;now to check if we are at the bottom we simply want to subtract 1 from the queue
 	;and AND, if the result is = 0 -> no floors below move up
 	;otherwise continue in direction
-
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
@@ -679,9 +668,40 @@ isSecond:
 	;queue is in r24:r25 we want a copy of it for our subtraction
 	lds temp1, floor_Queue
 	lds temp2, floor_Queue + 1
-	cp XL, temp1
-	cpc XH, temp2
-	brsh moveDown
+	cp temp1, XL
+	cpc temp2, XH
+	brne checkk
+	rcall open_door
+	jmp TimerEpilogue
+	checkk:
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds temp1, floor_Queue
+	lds temp2, floor_Queue + 1
+	and temp1, XL
+	and temp2, XH
+	cpi temp1, 0
+	ldi temp, 0
+	cpc temp2, temp
+	breq checkk2
+	rcall open_door
+	jmp TimerEpilogue
+	checkk2:
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds temp1, floor_Queue
+	lds temp2, floor_Queue + 1
+	cp temp1, XL
+	cpc temp2, XH
+	brlo moveDown
 	;now the second check to change direction
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
@@ -721,6 +741,8 @@ continue:
 	;otherwise move up
 	jmp continueUp
 continueDown:
+	ldi temp1, MOVING_DOWN
+	out portC, temp1
 	;move up the floors checking if a floor is in the queue
 	;first check if the CURRENT FLOOR IS ON QUEUE
 	;IF IT IS call the open door function
@@ -752,6 +774,8 @@ continueDown:
 	;do_lcd_data_in_register temp
 	jmp timerEpilogue
 continueUp:
+	ldi temp1, MOVING_UP
+	out portC, temp1
 ;move up the floors checking if a floor is in the queue
 	;first check if the CURRENT FLOOR IS ON QUEUE
 	;IF IT IS call the open door function
@@ -811,7 +835,11 @@ OPEN_DOOR:
 	;initialise voltage to max
 	sts OCR3BL, temp1
 	sts OCR3BH, temp1
+	ldi temp1, DOOR_CLOSED
+	out portC, temp1
 	rcall sleep_1s
+	ldi temp1, DOOR_OPEN
+	out portC, temp1
 	;motor spins for 1s then off
 	ldi temp1, 0
 	;initialise voltage to max
@@ -819,6 +847,8 @@ OPEN_DOOR:
 	sts OCR3BH, temp1
 	;now want to wait 3s before closing door
 	rcall sleep_3s
+	ldi temp1, DOOR_CLOSED
+	out portC, temp1
 	;turn motor on to signal door closing for 1s
 	ldi temp1, 0xff
 	;initialise voltage to max
