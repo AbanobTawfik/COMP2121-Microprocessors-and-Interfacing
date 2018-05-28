@@ -176,9 +176,13 @@
 		.byte 1
 	down:
 		.byte 1
-
+	timeOfClose:
+		.byte 1
+	alreadyClosing:
+		.byte 1
+	canClose:
+		.byte 1
 .cseg
-
 .org 0
 	jmp RESET
 .org INT0addr				; INT0addr is the address of EXT_INT0
@@ -510,42 +514,6 @@ sleep_15ms:
 	rcall sleep_5ms
 	ret
 
-sleep_50ms:
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-	rcall sleep_5ms
-
-	ret
-
-sleep_200ms:
-	rcall sleep_50ms
-	rcall sleep_50ms
-	rcall sleep_50ms
-	rcall sleep_50ms
-	ret
-
-sleep_1s:
-    rcall sleep_200ms
-	rcall sleep_200ms
-	rcall sleep_200ms
-	rcall sleep_200ms
-	rcall sleep_200ms
-	ret
-sleep_2s:
-	rcall sleep_1s
-	rcall sleep_1s
-	ret
-sleep_3s:
-	rcall sleep_2s
-	rcall sleep_1s
-	ret
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //																																						 //
 //													These are interrupt handlers																		 //
@@ -557,14 +525,16 @@ DEFAULT:
 
 PB1_ON_PRESS:
 ;  PROLOGUE
-	prologue
-	;want to debounce around 10ms 
-	lds temp, debounceRightStatus
-	cpi temp, 1
-	brne pb1epilogue				;the status will be on 10ms after button is pressed
+	prologue	
+
 	ldi temp, 0						;now it will be off so after 100ms will be set on again
 	sts debounceRightStatus, temp   
-	breq pb1epilogue
+	lds temp, canClose
+	cpi temp, 0
+	breq pb1Epilogue
+	ldi temp, 1
+	sts closing, temp
+
 	;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
 
 pb1Epilogue:
@@ -580,8 +550,7 @@ PB0_ON_PRESS:
 	brne pb0epilogue				;the status will be on 10ms after button is pressed
 	ldi temp, 0						;now it will be off so after 10ms will be set on again
 	sts debounceLeftStatus, temp   
-	ldi temp, 1
-	sts closing, temp
+
 pb0Epilogue:
 	;epilogue
 	epilogue
@@ -604,8 +573,8 @@ debounceTime:
 	lds r26, debounceTimer
 	lds r27, debounceTimer+1
 	adiw r27:r26, 1
-	cpi r26, low(1800)   ;rounding 800 up ^_^
-	ldi temp, high(1800)
+	cpi r26, low(100)   ;rounding 800 up ^_^
+	ldi temp, high(100)
 	cpc temp, r27
 	brne debounceStatusSkip				;after debouncy has been set to enable debounce statuses
 	;now we want to load the value of temporary counter into the register pair r25/r24
@@ -844,8 +813,11 @@ OPEN_DOOR:
 	out portC, temp1
 	jmp TimerEpilogue
 	skipOpen:
+
 	ldi temp1, DOOR_OPEN
-	out portC, temp1
+	out portC, temp1	
+	ldi temp1, 1
+	sts canClose, temp1
 	;motor spins for 1s then off
 	ldi temp1, 0
 	;initialise voltage to max
@@ -871,23 +843,43 @@ OPEN_DOOR:
 	breq closecheck
 	jmp skipovercheck
 	closecheck:
+	lds temp, alreadyClosing
+	cpi temp, 1
+	breq closeWithMotor
 	lds temp, secondCounter
-	cpi temp, 4
-	brlo closed
+	inc temp
+	sts timeOfClose, temp
+	lds temp, secondCounter
+	sts secondCounter, temp
+	jmp closeWithMotor
 	skipovercheck:
 	lds temp, secondCounter
 	cpi temp, 9
 	brsh closed
 	jmp TimerEpilogue
+	closeWithMotor:
+	ldi temp1, 1
+	sts alreadyClosing, temp1
+	ldi temp1, 0xff
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	lds temp1, timeOfClose
+	lds temp2, secondCounter
+	cp temp2, temp1
+	brsh closed
+	jmp TimerEpilogue	
 	closed:
-	;turn motor off and return
 	ldi temp1, 0
+	;turn motor off and return
 	;initialise voltage to max
 	sts OCR3BL, temp1
 	sts OCR3BH, temp1
 	sts secondCounter, temp1
 	sts closing, temp1
-
+	sts timeOfClose, temp1
+	sts alreadyClosing, temp1
+	sts canClose, temp1
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
