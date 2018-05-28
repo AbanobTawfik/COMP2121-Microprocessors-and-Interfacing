@@ -262,7 +262,6 @@ RESET:
 	sts TCCR3B, temp1
 	ldi temp1, (1<< WGM30)|(1<<COM3B1)
 	sts TCCR3A, temp1
-	ldi temp1, 12
 	jmp main
 
 ;scans through the rows n columns
@@ -647,13 +646,13 @@ isSecond:
 	sts secondCounter, temp1
 	lds temp, currentFloor
 	sts currentFloor, temp
+	out portC, temp
 	PRINT_FLOOR temp
-;		lds temp, floor_queue + 1
+;	lds temp, floor_queue + 1
 ;	out portC, temp
 	;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
 	lds r24, floor_queue
 	lds r25, floor_queue+1		;checking if the queue is empty
-	out portC, r25
 	cpi r24, 0
 	brne somethinginQueue
 	cpi r25, 0
@@ -671,18 +670,7 @@ isSecond:
 	;now to check if we are at the bottom we simply want to subtract 1 from the queue
 	;and AND, if the result is = 0 -> no floors below move up
 	;otherwise continue in direction
-	lds temp, currentFloor
-	PRINT_FLOOR temp
-	lds temp, currentFloor
-	;now we want to convert current floor into bit representation
-	ldi XL, 1
-	ldi XH, 0 
-	CONVERT_FLOOR_INTEGER temp, XL, XH
-	;queue is in r24:r25 we want a copy of it for our subtraction
-	lds temp1, floor_Queue
-	lds temp2, floor_Queue + 1
-	cp XL, temp1
-	cpc XH, temp2
+
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
@@ -693,7 +681,7 @@ isSecond:
 	lds temp2, floor_Queue + 1
 	cp XL, temp1
 	cpc XH, temp2
-	brge moveDown
+	brsh moveDown
 	;now the second check to change direction
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
