@@ -158,11 +158,7 @@
 		.byte 1
 	tempCounter:			;used to check if a second has passed
 		.byte 2
-	debounceLeftStatus:
-		.byte 1
-	debounceRightStatus:
-		.byte 1
-	debounceTimer:
+	strobeTimer:
 		.byte 2
 	opening:
 		.byte 1
@@ -184,6 +180,10 @@
 		.byte 1
 	emergencyShown:
 		.byte 1
+	strobeOn:
+		.byte 1
+	canOpen:
+		.byte 1
 .cseg
 .org 0
 	jmp RESET
@@ -200,7 +200,8 @@ RESET:
 	out SPL, r16
 	ldi r16, high(RAMEND)
 	out SPH, r16
-
+	ldi temp, 0
+	sts strobeOn, temp
 	ser r16
 	out DDRF, r16
 	out DDRA, r16
@@ -225,8 +226,6 @@ RESET:
 	ori temp, (1 <<INT0) | (1 << INT1)
 	out EIMSK, temp
 	ldi temp, 1
-	sts debounceRightStatus, temp 
-	sts debounceLeftStatus, temp 
 	ldi temp, 0b00000000
 	out TCCR0A, temp
 	ldi temp, 0b00000100
@@ -238,8 +237,7 @@ RESET:
 	ldi temp, 0
 	sts lastPressed, temp
 	clear floor_Queue
-	ldi temp, 0b000010
-	out portA, temp
+	clear strobeTimer
 	ldi temp, 0
 	sts currentFloor, temp
 	sts emergency, temp
@@ -417,6 +415,10 @@ star:
 	;emergency off
 	ldi temp, 0
 	sts emergency, temp
+	ldi temp, 0b00000000
+	out portA, temp
+	ldi temp, 0
+	out portC, temp
 	jmp main
 	emergency_ON:
 	;want to set emergency flag on
@@ -570,10 +572,7 @@ DEFAULT:
 
 PB1_ON_PRESS:
 ;  PROLOGUE
-	prologue	
-
-	ldi temp, 0						;now it will be off so after 100ms will be set on again
-	sts debounceRightStatus, temp   
+	prologue	 
 	lds temp, canClose
 	cpi temp, 0
 	breq pb1Epilogue
@@ -589,12 +588,11 @@ pb1Epilogue:
 PB0_ON_PRESS:
 ;  PROLOGUE
 	prologue
-	;want to debounce around 10ms 
-	lds temp, debounceLeftStatus
-	cpi temp, 1
-	brne pb0epilogue				;the status will be on 10ms after button is pressed
-	ldi temp, 0						;now it will be off so after 10ms will be set on again
-	sts debounceLeftStatus, temp   
+	lds temp, canOpen
+	cpi temp, 0
+	breq pb0Epilogue
+	ldi temp, 1
+	sts opening, temp
 
 pb0Epilogue:
 	;epilogue
@@ -607,33 +605,43 @@ Timer0OVF:
 	prologue
 	;button debouncing ~100 ms since 7812 = 1 second, 25 ms = 7812/1000 * 100 
 ;if the buttons status is on we want to start counter to reset it
-	lds temp, debounceRightStatus
-	cpi temp, 0
-	breq debounceTime
-	lds temp, debounceLeftStatus
-	cpi temp, 0
-	breq debounceTime
-	jmp debounceStatusSkip
-debounceTime:
-	lds r26, debounceTimer
-	lds r27, debounceTimer+1
+	lds temp, emergency
+	cpi temp, 1
+	breq strobePattern
+	jmp strobeSkip
+strobePattern:
+	lds r26, strobeTimer
+	lds r27, strobeTimer+1
 	adiw r27:r26, 1
-	cpi r26, low(100)   ;rounding 800 up ^_^
+	cpi r26, low(100)   ;on off ever 1/4s
 	ldi temp, high(100)
 	cpc temp, r27
-	brne debounceStatusSkip				;after debouncy has been set to enable debounce statuses
+	brne strobeSkip				;after debouncy has been set to enable debounce statuses
 	;now we want to load the value of temporary counter into the register pair r25/r24
-
-	ldi temp,1
-	sts debounceLeftStatus, temp
-	sts debounceRightStatus, temp
-	clear debounceTimer
+	
+	lds temp, strobeOn
+	cpi temp, 0
+	breq showStrobe
+	jmp offStrobe
+showStrobe:
+	ldi temp, 0b00000010
+	out portA, temp
+	ldi temp, 1
+	sts strobeOn, temp
+	jmp finishStrobe
+offStrobe:
+	ldi temp, 0b00000000
+	out portA, temp
+	ldi temp, 0
+	sts strobeOn, temp
+finishStrobe:
+	clear strobeTimer
 	clr r26
 	clr r27
 
-debounceStatusSkip:
-	sts debounceTimer, r26		;update the value of the temporary counter
-	sts debounceTimer+1, r27
+strobeSkip:
+	sts strobeTimer, r26		;update the value of the temporary counter
+	sts strobeTimer+1, r27
 	lds r24, tempCounter
 	lds r25, tempCounter+1
 	adiw r25:r24, 1			;increment the register pair
@@ -856,7 +864,24 @@ NotSecond:
 nothinginQueue:
 	ldi temp1, 0
 	sts secondCounter, temp1
+	ldi temp1, 1
+	sts canOpen, temp1
+	lds temp1, opening
+	cpi temp1, 1
+	breq addCurrToQueue
 	jmp timerEpilogue
+addCurrToQueue:
+	ldi temp1, 0
+	sts opening, temp1
+	lds temp1, currentFloor
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp1, XL, XH
+	lds ZL, floor_Queue
+	lds ZH, floor_Queue + 1	
+	UPDATE_STATE_ADD ZL,XL,ZH,XH
+	sts floor_Queue, ZL
+	sts floor_Queue+1,ZH
 timerEpilogue:
 	epilogue
 	reti
@@ -873,7 +898,9 @@ OPEN_DOOR:
 	ldi temp1, DOOR_CLOSED
 	out portC, temp1
 	jmp TimerEpilogue
-	skipOpen:
+skipOpen:
+	ldi temp1, 1
+	sts canOpen, temp1
 
 	ldi temp1, DOOR_OPEN
 	out portC, temp1	
@@ -891,7 +918,19 @@ OPEN_DOOR:
 	cpi temp, 7
 	brsh startClosing
 	jmp TimerEpilogue
-	startClosing:
+startClosing:
+	lds temp, opening
+	cpi temp, 1
+	breq startReopening
+	jmp skipReopening
+startReopening:
+	ldi temp, 2
+	sts secondCounter, temp
+	ldi temp, 0
+	sts opening, temp
+	epilogue
+	ret
+skipReopening:
 	ldi temp1, DOOR_CLOSED
 	out portC, temp1
 	;turn motor on to signal door closing for 1s
@@ -903,7 +942,7 @@ OPEN_DOOR:
 	cpi temp, 1
 	breq closecheck
 	jmp skipovercheck
-	closecheck:
+closecheck:
 	lds temp, alreadyClosing
 	cpi temp, 1
 	breq closeWithMotor
@@ -913,12 +952,12 @@ OPEN_DOOR:
 	lds temp, secondCounter
 	sts secondCounter, temp
 	jmp closeWithMotor
-	skipovercheck:
+skipovercheck:
 	lds temp, secondCounter
 	cpi temp, 9
 	brsh closed
 	jmp TimerEpilogue
-	closeWithMotor:
+closeWithMotor:
 	ldi temp1, 1
 	sts alreadyClosing, temp1
 	ldi temp1, 0xff
@@ -930,7 +969,7 @@ OPEN_DOOR:
 	cp temp2, temp1
 	brsh closed
 	jmp TimerEpilogue	
-	closed:
+closed:
 	ldi temp1, 0
 	;turn motor off and return
 	;initialise voltage to max
@@ -941,6 +980,8 @@ OPEN_DOOR:
 	sts timeOfClose, temp1
 	sts alreadyClosing, temp1
 	sts canClose, temp1
+	sts opening, temp1
+	sts canOpen, temp1
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
@@ -956,9 +997,11 @@ OPEN_DOOR:
 	cpi temp, 1
 	breq showDisplay
 	jmp skipDisplay
-	showDisplay:
+showDisplay:
 	ldi temp, 1
 	sts emergencyshown, temp
+	ldi temp, 0xff
+	out portC, temp
 	PRINT_EMERGENCY
 	epilogue
 	ret
@@ -987,6 +1030,8 @@ forceClose:
 	sts alreadyClosing, temp1
 	sts canClose, temp1
 	lds temp, currentFloor
+	sts opening, temp1
+	sts canOpen, temp1
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
 	ldi XH, 0 
@@ -999,3 +1044,4 @@ forceClose:
 	sts floor_Queue+1,ZH
 	epilogue
 	ret
+
