@@ -580,9 +580,8 @@ PB0_ON_PRESS:
 	brne pb0epilogue				;the status will be on 10ms after button is pressed
 	ldi temp, 0						;now it will be off so after 10ms will be set on again
 	sts debounceLeftStatus, temp   
-
-
-
+	ldi temp, 1
+	sts closing, temp
 pb0Epilogue:
 	;epilogue
 	epilogue
@@ -767,7 +766,13 @@ continueDown:
 	rcall OPEN_DOOR
 	ignoredown:
 	;after regardless of return we sleep for 2s
-	rcall sleep_2s
+	lds temp, secondCounter
+	cpi temp, 2
+	breq anotherskipp
+	jmp timerEpilogue
+	anotherskipp:
+	ldi temp, 0
+	sts secondCounter, temp
 	lds temp, currentFloor
 	dec temp
 	sts currentFloor, temp
@@ -800,7 +805,14 @@ continueUp:
 	rcall OPEN_DOOR
 	ignoreup:
 	;after regardless of return we sleep for 2s
-	rcall sleep_2s
+	;after regardless of return we sleep for 2s
+	lds temp, secondCounter
+	cpi temp, 2
+	breq anotherskippr
+	jmp timerEpilogue
+	anotherskippr:
+	ldi temp, 0
+	sts secondCounter, temp
 	lds temp, currentFloor	
 	inc temp
 	sts currentFloor, temp
@@ -821,6 +833,60 @@ timerEpilogue:
 
 OPEN_DOOR:
 	prologue
+	lds temp, secondCounter
+	cpi temp, 3
+	brsh skipOpen
+	ldi temp1, 0xff
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	ldi temp1, DOOR_CLOSED
+	out portC, temp1
+	jmp TimerEpilogue
+	skipOpen:
+	ldi temp1, DOOR_OPEN
+	out portC, temp1
+	;motor spins for 1s then off
+	ldi temp1, 0
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	lds temp, closing
+	cpi temp, 1
+	breq startClosing
+	lds temp, secondCounter
+	cpi temp, 7
+	brsh startClosing
+	jmp TimerEpilogue
+	startClosing:
+	ldi temp1, DOOR_CLOSED
+	out portC, temp1
+	;turn motor on to signal door closing for 1s
+	ldi temp1, 0xff
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	lds temp, closing
+	cpi temp, 1
+	breq closecheck
+	jmp skipovercheck
+	closecheck:
+	lds temp, secondCounter
+	cpi temp, 4
+	brlo closed
+	skipovercheck:
+	lds temp, secondCounter
+	cpi temp, 9
+	brsh closed
+	jmp TimerEpilogue
+	closed:
+	;turn motor off and return
+	ldi temp1, 0
+	;initialise voltage to max
+	sts OCR3BL, temp1
+	sts OCR3BH, temp1
+	sts secondCounter, temp1
+	sts closing, temp1
 
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
@@ -833,34 +899,5 @@ OPEN_DOOR:
 	eor ZH,XH
 	sts floor_Queue, ZL
 	sts floor_Queue+1,ZH
-	ldi temp1, 0xff
-	;initialise voltage to max
-	sts OCR3BL, temp1
-	sts OCR3BH, temp1
-	ldi temp1, DOOR_CLOSED
-	out portC, temp1
-	rcall sleep_1s
-	ldi temp1, DOOR_OPEN
-	out portC, temp1
-	;motor spins for 1s then off
-	ldi temp1, 0
-	;initialise voltage to max
-	sts OCR3BL, temp1
-	sts OCR3BH, temp1
-	;now want to wait 3s before closing door
-	rcall sleep_3s
-	ldi temp1, DOOR_CLOSED
-	out portC, temp1
-	;turn motor on to signal door closing for 1s
-	ldi temp1, 0xff
-	;initialise voltage to max
-	sts OCR3BL, temp1
-	sts OCR3BH, temp1
-	rcall sleep_1s
-	;turn motor off and return
-	ldi temp1, 0
-	;initialise voltage to max
-	sts OCR3BL, temp1
-	sts OCR3BH, temp1
 	epilogue
 	ret
