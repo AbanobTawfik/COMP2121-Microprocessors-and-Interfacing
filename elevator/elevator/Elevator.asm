@@ -812,6 +812,8 @@ NotSecond:
 	jmp TimerEpilogue
 
 nothinginQueue:
+	ldi temp1, 0
+	sts secondCounter, temp1
 	jmp timerEpilogue
 timerEpilogue:
 	epilogue
