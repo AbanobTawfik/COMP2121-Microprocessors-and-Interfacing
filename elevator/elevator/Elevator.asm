@@ -653,9 +653,10 @@ isSecond:
 	;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
 	lds r24, floor_queue
 	lds r25, floor_queue+1		;checking if the queue is empty
+	out portC, r25
 	cpi r24, 0
-	ldi temp, 0
-	cpc temp, r25
+	brne somethinginQueue
+	cpi r25, 0
 	brne somethinginQueue			;if nothing is in the queue we just want to return!
 	jmp nothinginQueue
 	somethinginQueue:
@@ -670,7 +671,8 @@ isSecond:
 	;now to check if we are at the bottom we simply want to subtract 1 from the queue
 	;and AND, if the result is = 0 -> no floors below move up
 	;otherwise continue in direction
-
+	lds temp, currentFloor
+	PRINT_FLOOR temp
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
@@ -679,10 +681,19 @@ isSecond:
 	;queue is in r24:r25 we want a copy of it for our subtraction
 	lds temp1, floor_Queue
 	lds temp2, floor_Queue + 1
-	out portC, temp1
-	cp temp1, XL
-	cpc temp2, XH
-	brlo moveDown
+	cp XL, temp1
+	cpc XH, temp2
+	lds temp, currentFloor
+	;now we want to convert current floor into bit representation
+	ldi XL, 1
+	ldi XH, 0 
+	CONVERT_FLOOR_INTEGER temp, XL, XH
+	;queue is in r24:r25 we want a copy of it for our subtraction
+	lds temp1, floor_Queue
+	lds temp2, floor_Queue + 1
+	cp XL, temp1
+	cpc XH, temp2
+	brge moveDown
 	;now the second check to change direction
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
@@ -749,7 +760,6 @@ continueDown:
 	rcall sleep_2s
 	lds temp, currentFloor
 	dec temp
-	PRINT_FLOOR temp
 	sts currentFloor, temp
 	;do_lcd_data_in_register temp
 	jmp timerEpilogue
@@ -780,7 +790,6 @@ continueUp:
 	;after regardless of return we sleep for 2s
 	rcall sleep_2s
 	lds temp, currentFloor	
-	PRINT_FLOOR temp
 	inc temp
 	sts currentFloor, temp
 	;do_lcd_data_in_register temp
@@ -806,7 +815,8 @@ OPEN_DOOR:
 	CONVERT_FLOOR_INTEGER temp, XL, XH
 	lds ZL, floor_Queue
 	lds ZH, floor_Queue + 1	
-	UPDATE_STATE_REMOVE ZL,XL,ZH,XH
+	eor ZL,XL 
+	eor ZH,XH
 	sts floor_Queue, ZL
 	sts floor_Queue+1,ZH
 	ldi temp1, 0xff
