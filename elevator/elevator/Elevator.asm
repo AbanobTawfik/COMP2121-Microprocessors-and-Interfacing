@@ -628,22 +628,22 @@ somethinginQueue:
 
     ; then move down all the way till it reaches thw lowest floor, taking floors off the queue on its way
     ; i was inspired to do this by attempting my java implementation where i had a queue of booleans size 9
-	; and each index showed a floor, and i would check if the current floor is the maximum floor and continue up
-	; and check if current floor is min floor and continue down
-	; to check if we are at the max floor, we can simply just check if the current floor in bits is higher than all the other floors
-	; if there is a floor above, the queue will have a higher value
-	; if we are on floor 3 and our queue is floor 1 2 3 -> 0b111
-	; since floor 3 has value 8 and floor 1 and 2 together have value 7
-	; floor 3 is higher than the remaining queue itself 
-	; so we will set the direction to move down
+    ; and each index showed a floor, and i would check if the current floor is the maximum floor and continue up
+    ; and check if current floor is min floor and continue down
+    ; to check if we are at the max floor, we can simply just check if the current floor in bits is higher than all the other floors
+    ; if there is a floor above, the queue will have a higher value
+    ; if we are on floor 3 and our queue is floor 1 2 3 -> 0b111
+    ; since floor 3 has value 8 and floor 1 and 2 together have value 7
+    ; floor 3 is higher than the remaining queue itself 
+    ; so we will set the direction to move down
     ; 0b01111111 < 0b10000000
 
-	; to check if we are at the minimum floor we want to check if there are any floors below the current floor
+    ; to check if we are at the minimum floor we want to check if there are any floors below the current floor
     ; to do this we can subtract 1 from the current floor so if we are on floor 3 0b100 -> 0b011
-	; then we check if there are any floors in 0b110 by anding the queue with the 0b011
-	; if the result is 0 that means there are no lower floors
-	; if floor 1 was still in the queue our result would be 0b001 not 0 so that means there is a lower floor
-	; we will continue in one direction until either of these conditions are met which will swap the directions
+    ; then we check if there are any floors in 0b110 by anding the queue with the 0b011
+    ; if the result is 0 that means there are no lower floors
+    ; if floor 1 was still in the queue our result would be 0b001 not 0 so that means there is a lower floor
+    ; we will continue in one direction until either of these conditions are met which will swap the directions
 
     lds temp, currentFloor                            ; now we want to convert current floor into bit representation
     ldi XL, 1
