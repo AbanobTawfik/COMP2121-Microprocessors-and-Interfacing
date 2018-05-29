@@ -150,7 +150,7 @@
     tempCounter:                                      ; used as counter to check for seconds
         .byte 2
     strobeTimer:                                      ; timer for strobe flash (n times per second)
-        .byte 2
+        .byte 1
     opening:                                          ; will be used to check if the open button was pressed
         .byte 1
     closing:                                          ; will be used to check if the close button was pressed
@@ -175,6 +175,8 @@
         .byte 1
     canOpen:                                          ; check if the elevator is in a state where it can be opened, i.e no floors in queue/not moving
         .byte 1
+    doorSequence:                                     ; will be used to check if we have stopped at a floor
+	    .byte 1
 .cseg
 .org 0
     jmp RESET
@@ -385,11 +387,11 @@ emergency_ON:
     ; want to set emergency flag
     ldi temp, 1
     sts emergency, temp
-	; now we want to check if the door is currently open 
-    lds temp, canClose
+	; now we want to check if the door is currently open	 
+    lds temp, doorSequence
     cpi temp, 0
     breq nothingToRemove                              ; if the door is OPEN it canClose -> FORCE IT CLOSED  
-    rcall forceClose                                  ; this will force the door to shut
+	rcall forceClose                                  ; this will force the door to shut
 nothingToRemove:
 	; forcing motor off regardless incase door is opening causes a weird bug
     ldi temp1, 0
@@ -551,11 +553,8 @@ Timer0OVF:
     jmp strobeSkip                                    ; otherwise skip strobe light display
 strobePattern:
     lds r26, strobeTimer
-    lds r27, strobeTimer+1
-    adiw r27:r26, 1
-    cpi r26, low(100)                                 ; every 1/4s we want to toggle the strobe light
-    ldi temp, high(100)
-    cpc temp, r27
+    subi r26, -1
+    cpi r26, 100                                      ; every 1/4s we want to toggle the strobe light
     brne strobeSkip
     lds temp, strobeOn                                ; if the strobe is off 
     cpi temp, 0
@@ -578,7 +577,6 @@ finishStrobe:
     clr r27
 strobeSkip:
     sts strobeTimer, r26                              ; update the value of the strobe timer if the 100 hasn't been mett
-    sts strobeTimer+1, r27
     lds r24, tempCounter
     lds r25, tempCounter+1                            ; load the value of the timer
     adiw r25:r24, 1                                   ; increment the register pair
@@ -671,143 +669,130 @@ checkk:
     cpi temp1, 0                                      ; compare the result to 0
     ldi temp, 0
     cpc temp2, temp
-    breq checkk2                                      ; if the result is 0 that means     
-    rcall open_door
-    jmp TimerEpilogue
+    breq checkk2                                      ; if the result is not 0 that means we are currently on a floor in the queue 
+    rcall open_door                                   ; open the door
+    jmp TimerEpilogue                                 ; return from interrupt
+; check for direction of movement
 checkk2:
-    lds temp, currentFloor
-    ;now we want to convert current floor into bit representation
+    ; check movement down
+    lds temp, currentFloor                            ; converting current floor into bit representation
     ldi XL, 1
     ldi XH, 0 
-    CONVERT_FLOOR_INTEGER temp, XL, XH
-    ;queue is in r24:r25 we want a copy of it for our subtraction
-    lds temp1, floor_Queue
+    CONVERT_FLOOR_INTEGER temp, XL, XH                        
+    lds temp1, floor_Queue                            ; now we want to load the queue into a register pair 
     lds temp2, floor_Queue + 1
-    cp temp1, XL
+    cp temp1, XL                                      ; now we want to compare the current queue with the current floor
     cpc temp2, XH
-    brlo moveDown
-    ;now the second check to change direction
-    lds temp, currentFloor
-    ;now we want to convert current floor into bit representation
+    brlo moveDown                                     ; if the queue is SMALLER THAN THE CURRENT FLOOR SET DIRECTION TO DOWN
+	; check movement up
+    lds temp, currentFloor                            ; convert current floor into bits
     ldi XL, 1
     ldi XH, 0 
     CONVERT_FLOOR_INTEGER temp, XL, XH
-    ;queue is in r24:r25 we want a copy of it for our subtraction
-    lds temp1, floor_Queue
+    lds temp1, floor_Queue                            ; load current floro into register pair
     lds temp2, floor_Queue + 1
-    sbiw XH:XL, 1
-    and XL, temp1
+    sbiw XH:XL, 1                                     ; subtract 1 from current floor so 0b100 -> 0b011 as in above
+    and XL, temp1                                     ; now we want to and the current floor - 1 with the queue
     and XH, temp2
     cpi XL, 0
-    ldi temp, 0
+    ldi temp, 0                                       ; if the result is = 0 that means we are at lowest floor 
     cpc XH, temp
-    ;if its = 0 that means direction is up as there are no lower floors
-    brne anotherSkip
-    jmp moveUp
+    brne anotherSkip                                  ; if it is not = 0 that means there are more floors below eg if floor 1 anded we would get 1 not 0
+	; to avoid relative branch out of reach
+    jmp moveUp                                        ; if its = 0 set direction to up
+; jump to move in the same direction
 anotherSkip:
-    jmp continue
-
+    jmp continue                                      ; continues moving in the direction stored in the DOWN flag 
 moveDown:
-    ;set direction to be down so down == trye
     ldi temp, 1
-    sts down, temp
+    sts down, temp                                    ; store true in the down flag so elevator will move downwards
     jmp continue
 moveUp:
-    ;set direction to be up so down == false
     ldi temp, 0
-    sts down, temp
+    sts down, temp                                    ; store false in the down flag so elevator will move upwards
     jmp continue
-
+; this will move the elevator in the direction stored in down, 1-> down 0-> up
 continue:
     lds temp, down
-    cpi temp, 1
-    breq continueDown
-    ;otherwise move up
-    jmp continueUp
+    cpi temp, 1                                       ; if direction stored in the down flag == 1
+    breq continueDown                                 ; continue downwards
+    jmp continueUp                                    ; else move up
+; move down the floors checking if a floor is in the queue
+; first check if the CURRENT FLOOR IS ON QUEUE
+; IF IT IS call the open door function
+; the floor will be removed from queue in the open door function
+; return from open if called
+; delay for 2s between floors.
+; decrement current floor by 1
 continueDown:
     ldi temp1, MOVING_DOWN
-    out portC, temp1
-    ;move up the floors checking if a floor is in the queue
-    ;first check if the CURRENT FLOOR IS ON QUEUE
-    ;IF IT IS call the open door function
-    ;return from open if called
-    ;delay for 2s between floors.
-    ;increment current floor by 1
-    lds temp, currentFloor
-    ;now we want to convert current floor into bit representation
+    out portC, temp1                                  ; output to the LED down pattern, lower half of LED lit up
+    lds temp, currentFloor                            ; convert the current floor into bit representation
     ldi XL, 1
     ldi XH, 0 
     CONVERT_FLOOR_INTEGER temp, XL, XH
-    ;queue is in r24:r25 we want a copy of it for our subtraction
     lds temp1, floor_Queue
-    lds temp2, floor_Queue + 1
+    lds temp2, floor_Queue + 1                        ; now we want to check if the current floor while moving down is on the queue
     and temp1, XL
-    and temp2, XH
+    and temp2, XH                                     ; to do this and the floor with the queue
     cpi temp1, 0
     ldi temp, 0
     cpc temp2, temp
-    breq ignoredown
-    ;in here we will update the queue by removing the current floor
-    rcall OPEN_DOOR
+    breq ignoredown                                   ; if result = 0 that means the floor isn't on queue (result should be the current floor if it is)
+                                                      ; so ignore the open door call and continue
+    rcall OPEN_DOOR                                   ; otherwise we open the door 
 ignoredown:
-    ;after regardless of return we sleep for 2s
-    lds temp, secondCounter
-    cpi temp, 2
-    breq anotherskipp
-    jmp timerEpilogue
+    lds temp, secondCounter                           ; whether we open or close the door we will wait for 2 seconds so
+    cpi temp, 2                                       ; check if the second counter has 2 inside of it
+    breq anotherskipp                                 ; if its = 2 that means we can continue to the next floor below
+    jmp timerEpilogue                                 ; otherwise return from interrupt
+; seriously relative branch out of reach is so stupid
 anotherskipp:
-    ldi temp, 0
+    ldi temp, 0                                       ; reset the counter for number of seconds stored so it can constantly perform the ignoredown label correctly
     sts secondCounter, temp
-    lds temp, currentFloor
+    lds temp, currentFloor                            ; decrement the current floor by 1 since we are moving down
     dec temp
-    sts currentFloor, temp
-    ;do_lcd_data_in_register temp
-    jmp timerEpilogue
+    sts currentFloor, temp                            ; store the decremented current floor into the label
+    jmp timerEpilogue                                 ; return from interrupt handler
+; move up the floors checking if a floor is in the queue
+; first check if the CURRENT FLOOR IS ON QUEUE
+; IF IT IS call the open door function
+; return from open if called
+; delay for 2s between floors.
+; increment current floor by 1
 continueUp:
-    ldi temp1, MOVING_UP
+    ldi temp1, MOVING_UP                              ; output to the LED's the moving up pattern (top half of LED is lit up)  
     out portC, temp1
-    ;move up the floors checking if a floor is in the queue
-    ;first check if the CURRENT FLOOR IS ON QUEUE
-    ;IF IT IS call the open door function
-    ;return from open if called
-    ;delay for 2s between floors.
-    ;increment current floor by 1
-    lds temp, currentFloor
-    ;now we want to convert current floor into bit representation
+    lds temp, currentFloor                            ; converting the current floor into the bit representation
     ldi XL, 1
     ldi XH, 0 
     CONVERT_FLOOR_INTEGER temp, XL, XH
-    ;queue is in r24:r25 we want a copy of it for our subtraction
     lds temp1, floor_Queue
-    lds temp2, floor_Queue + 1
+    lds temp2, floor_Queue + 1                        ; now we want to load the queue so we can check if the current floor is on the queue
     and temp1, XL
-    and temp2, XH
+    and temp2, XH                                     ; and the queue with the current floor
     cpi temp1, 0
     ldi temp, 0
-    cpc temp2, temp
-    breq ignoreup
-    ;in here we will update the queue by removing the current floor
-    rcall OPEN_DOOR
+    cpc temp2, temp                                   ; check if the result is 0 (i.e not on queue) if it was result would be the current floor in bits
+    breq ignoreup                                     ; if result is equal to 0 we skip over and go to the ignore up label don't open the door
+    rcall OPEN_DOOR                                   ; otherwise we will open door (this will remove current floor from queue)
 ignoreup:
-    ;after regardless of return we sleep for 2s
-    ;after regardless of return we sleep for 2s
-    lds temp, secondCounter
+    lds temp, secondCounter                           ; whether we open the door or not we still want to delay 2s between floors
     cpi temp, 2
-    breq anotherskippr
-    jmp timerEpilogue
+    breq anotherskippr                                ; if the amount of seconds passed is 2 we want to go to the label which will update the current floor
+    jmp timerEpilogue                                 ; otherwise return from the interrupt handler
 anotherskippr:
-    ldi temp, 0
+    ldi temp, 0                                       ; reset the amount of seconds passed so we can keep performing continue up
     sts secondCounter, temp
-    lds temp, currentFloor    
+    lds temp, currentFloor                            ; increment the current floor by 1
     inc temp
-    sts currentFloor, temp
-    ;do_lcd_data_in_register temp
-    jmp timerEpilogue    
+    sts currentFloor, temp                            ; store the incremented current floor into the label
+    jmp timerEpilogue                                 ; return from the interrupt handler
 NotSecond:
-    sts TempCounter, r24        ;update the value of the temporary counter
+    sts TempCounter, r24                              ;update the value of the temporary counter
     sts TempCounter+1, r25    
     jmp TimerEpilogue
-
+; if nothing is in the queue we have to also account for if open button (PB1) is pressed
 nothinginQueue:
     ldi temp1, 0
     sts secondCounter, temp1
@@ -835,6 +820,8 @@ timerEpilogue:
 
 OPEN_DOOR:
     prologue
+	ldi temp, 1
+	sts doorSequence, temp
     lds temp, secondCounter
     cpi temp, 3
     brsh skipOpen
@@ -940,6 +927,7 @@ closed:
     sts canClose, temp1
     sts opening, temp1
     sts canOpen, temp1
+	sts doorSequence, temp1
     lds temp, currentFloor
     ;now we want to convert current floor into bit representation
     ldi XL, 1
@@ -956,6 +944,12 @@ closed:
     breq showDisplay
     jmp skipDisplay
 showDisplay:
+	lds temp, CurrentFloor
+	cpi temp, 0
+	breq cont
+	epilogue
+	ret
+cont:
     ldi temp, 1
     sts emergencyshown, temp
     ldi temp, 0xff
@@ -986,9 +980,11 @@ forceClose:
     sts timeOfClose, temp1
     sts alreadyClosing, temp1
     sts canClose, temp1
-    lds temp, currentFloor
     sts opening, temp1
     sts canOpen, temp1
+	sts doorSequence, temp1    
+	lds temp, currentFloor
+
     ;now we want to convert current floor into bit representation
     ldi XL, 1
     ldi XH, 0 
