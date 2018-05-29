@@ -1,28 +1,27 @@
 .include "m2560def.inc"
 .include "macros.asm"
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//																																						 //
-//													THESE ARE MACROS USES																				 //
-//																																						 //
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+//////////////////////////////////////
+//									//
+//		THESE ARE MACROS USES		//
+//									//
+//////////////////////////////////////
 .macro do_lcd_data
 	ldi r16, @0
 	rcall lcd_data
 	rcall lcd_wait
 .endmacro
-
+;macro will be for initial loading of LCD
 .macro initalise_LCD
-	 do_lcd_command 0b00111000 ; 2x5x7
+	 do_lcd_command 0b00111000						; 2x5x7
 	rcall sleep_5ms
-	 do_lcd_command 0b00111000 ; 2x5x7
+	 do_lcd_command 0b00111000						; 2x5x7
 	rcall sleep_1ms
-	 do_lcd_command 0b00111000 ; 2x5x7
-	 do_lcd_command 0b00111000 ; 2x5x7
-	 do_lcd_command 0b00001000 ; display off?
-	 do_lcd_command 0b00000001 ; clear display
-	 do_lcd_command 0b00000110 ; increment, no display shift
-	 do_lcd_command 0b00001110 ; Cursor on, bar, no blink
+	 do_lcd_command 0b00111000						; 2x5x7
+	 do_lcd_command 0b00111000						; 2x5x7
+	 do_lcd_command 0b00001000						; display off?
+	 do_lcd_command 0b00000001						; clear display
+	 do_lcd_command 0b00000110						; increment, no display shift
+	 do_lcd_command 0b00001110						; Cursor on, bar, no blink
 	 do_lcd_data ' '
 	 do_lcd_data ' '
 	 do_lcd_data ' '
@@ -32,7 +31,7 @@
 	 do_lcd_data 'i'
 	 do_lcd_data 'f'
 	 do_lcd_data 't'
-	do_lcd_command 0b0011000000    ; address of second line on lcd
+	do_lcd_command 0b0011000000						; address of second line on lcd
 	do_lcd_data 'f'
 	do_lcd_data 'l'
 	do_lcd_data 'o'
@@ -42,11 +41,11 @@
 	do_lcd_data ' '
 	do_lcd_data '0'
 .endmacro
-
+;macro for showing the current state of lift which floor it is in
 .macro PRINT_FLOOR
-	 do_lcd_command 0b00000001 ; clear display
-	 do_lcd_command 0b00000110 ; increment, no display shift
-	 do_lcd_command 0b00001110 ; Cursor on, bar, no blink
+	 do_lcd_command 0b00000001						; clear display
+	 do_lcd_command 0b00000110						; increment, no display shift
+	 do_lcd_command 0b00001110						; Cursor on, bar, no blink
 	 do_lcd_data ' '
 	 do_lcd_data ' '
 	 do_lcd_data ' '
@@ -56,7 +55,7 @@
 	 do_lcd_data 'i'
 	 do_lcd_data 'f'
 	 do_lcd_data 't'
-	 do_lcd_command 0b0011000000    ; address of second line on lcd
+	 do_lcd_command 0b0011000000					; address of second line on lcd
 	 do_lcd_data 'f'
 	 do_lcd_data 'l'
 	 do_lcd_data 'o'
@@ -69,30 +68,22 @@
 	 rcall lcd_data
 	 rcall lcd_wait
 .endmacro
-
- .macro do_lcd_command
+.macro do_lcd_command
 	ldi r16, @0
 	rcall lcd_command
 	rcall lcd_wait
 .endmacro
-
+;macro will display the value inside a register
 .macro do_lcd_data_in_register
 	mov r16, @0
 	rcall lcd_data
 	rcall lcd_wait
 .endmacro
-
-.macro do_lcd_8bit
-	mov r16, @0
-	rcall lcd_8bit
-	rcall lcd_wait
-.endmacro
-
+;This macro will display the emergency message
 .macro PRINT_EMERGENCY
 	prologue
-	do_lcd_command 0b00000001 ; clear display
-
-	do_lcd_command 0b10000000    ; address of first line on lcd
+	do_lcd_command 0b00000001						; clear display
+	do_lcd_command 0b10000000						; address of first line on lcd
 	do_lcd_data 'E'
 	do_lcd_data 'm'
 	do_lcd_data 'e'
@@ -114,212 +105,195 @@
 	do_lcd_data '0'
 	epilogue
 .endmacro
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//																																						 //
-//													This is the main body of code																		 //
-//																																						 //
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-.def row = r16						; current row number
-.def col = r17						; current column number
-.def rmask = r18					; mask for current row during scan
-.def cmask = r19					; mask for current column during scan
+//////////////////////////////////////
+//									//
+//	  Main + Initalising ports	    //
+//									//
+//////////////////////////////////////
+; register naming
+.def row = r16										; current row number
+.def col = r17										; current column number
+.def rmask = r18									; mask for current row during scan
+.def cmask = r19									; mask for current column during scan
 .def temp1 = r20
 .def temp2 = r21
 .def topRow = r22
 .def bottomRow = r23
 .def numberSize = r24
 .def temp = r25
-
-.equ PORTLDIR = 0xF0				; PL7-4: output, PL3-0, input 
-
-//for each search we want to start our search at the right most column 0xEF -> 
-.equ INITCOLMASK = 0xEF				; 0b1110 1111 scan from the rightmost column,
-.equ INITROWMASK = 0x01				; 0b0000 0001 scan from the top row
+; variable naming
+.equ PORTLDIR = 0xF0								; PL7-4: output, PL3-0, input 
+.equ INITCOLMASK = 0xEF								; 0b1110 1111 scan from the rightmost column,
+.equ INITROWMASK = 0x01								; 0b0000 0001 scan from the top row
 .equ ROWMASK = 0x0F	
-
-;LED PATTERNS
-;door open is 0b11000011 supposed to look like open space for door
-.equ DOOR_OPEN = 0xC3
-;door closed is 0b11101111 the 0 in middle is the gap for door
-.equ DOOR_CLOSED = 0xE7
-;door moving up 0b00001111
-.equ MOVING_UP = 0xF0
-;door moving down 0b11110000
-.equ MOVING_DOWN = 0x0F
-
+; LED PATTERNS
+.equ DOOR_OPEN = 0xC3								; door open is 0b11000011 supposed to look like open space for door 0 = space in middle, 1 = metal
+.equ DOOR_CLOSED = 0xE7								; door closed is 0b11101111 the 0 in middle is the gap for door 0 = space, 1 = metal
+.equ MOVING_UP = 0xF0								; door moving up 0b11110000 upper half of the LCD lit up to show direction UP 
+.equ MOVING_DOWN = 0x0F								; door moving down 0b00001111 lower half of the LCD lit up to show direction down
+; Labels in Data Memory
 .dseg
-	debounceValue:					; this will check if a key has been pressed
+	debounceValue:									; this will check if a key has been pressed on key pad
 		.byte 1
-	lastPressed:
+	lastPressed:									; this will also be used for keypad debouncing
 		.byte 1
-	secondCounter:
+	secondCounter:									; this will be used to keep track of seconds passed
 		.byte 1
-	tempCounter:			;used to check if a second has passed
+	tempCounter:									; used as counter to check for seconds
 		.byte 2
-	strobeTimer:
+	strobeTimer:									; timer for strobe flash (n times per second)
 		.byte 2
-	opening:
+	opening:										; will be used to check if the open button was pressed
 		.byte 1
-	closing:
+	closing:										; will be used to check if the close button was pressed
 		.byte 1
-	currentFloor:
+	currentFloor:									; will be used to hold the current floor
 		.byte 1
-	floor_Queue:
+	floor_Queue:									; THE MAIN QUEUE FOR THE ELEVATOR
 		.byte 2
-	emergency:
+	emergency:										; will be used as a flag for emergency protocol
 		.byte 1
-	down:
+	down:											; used to check direction of elevator movement
 		.byte 1
-	timeOfClose:
+	timeOfClose:									; will be used to check when the close button was pressed so we can add a one second delay to close door
 		.byte 1
-	alreadyClosing:
+	alreadyClosing:									; used to for further check if the close button was pressed and it is already closing
 		.byte 1
-	canClose:
+	canClose:										; used to check if the elevator is in a state where it can be closed (door just finished opening)
 		.byte 1
-	emergencyShown:
+	emergencyShown:									; used as a flag to check when the first time emergency is shown so can see floors on way down to 0
 		.byte 1
-	strobeOn:
+	strobeOn:										; check if strobe light is on/off
 		.byte 1
-	canOpen:
+	canOpen:										; check if the elevator is in a state where it can be opened, i.e no floors in queue/not moving
 		.byte 1
 .cseg
 .org 0
 	jmp RESET
-.org INT0addr				; INT0addr is the address of EXT_INT0
+.org INT0addr										; INT0addr is the address of EXT_INT0
 	jmp PB0_ON_PRESS
-.org INT1addr				; INT1addr is the address of EXT_INT1
-	jmp PB1_ON_PRESS		;IRQ0 will be the interrupt handled by connecting PB1 to the INT0 portD aka RDX3
-
+.org INT1addr										; INT1addr is the address of EXT_INT1
+	jmp PB1_ON_PRESS
 .org OVF0addr
-	jmp Timer0OVF			;this will be handler for timer overflow
-
+	jmp Timer0OVF									;this will be handler for timer overflow
+; RESET will contain all initalisation for the board
 RESET:
+	; initialising the stack
 	ldi r16, low(RAMEND)
 	out SPL, r16
 	ldi r16, high(RAMEND)
 	out SPH, r16
 	ldi temp, 0
-	sts strobeOn, temp
+	sts strobeOn, temp								; clear the label for strobe on
 	ser r16
-	out DDRF, r16
-	out DDRA, r16
+	out DDRF, r16									; set port F to be output
+	out DDRA, r16									; set port A to be output
 	clr r16
-	out PORTF, r16
+	out PORTF, r16									; outputting 0 into port F and port A
 	out PORTA, r16
-	sts lastPressed, r16
+	; clear the label for the debounce flags
+	sts lastPressed, r16							
 	sts debounceValue, r16
-	;initalising output and input for the keypad
-	ldi temp1, PORTLDIR					; PA7:4/PA3:0, out/in
+	; initalising output and input for the keypad
+	ldi temp1, PORTLDIR								; PA7:4/PA3:0, out/in
 	sts DDRL, temp1
-	//will make portC output 0xff
-	ser temp1							; PORTC is output
+	ser temp1										; PORTC is output
 	out DDRC, temp1
-	;now for the important part is sent INT1 and INT0 to trigger on falling edges for external interupt
-	ldi temp, (1 << ISC11) | (1 << ISC01)
-	;set the external interrupt control register A to trigger for INT0 and INT1
-	;we chose EICRA because it handles for INT0-INT3
-	sts EICRA, temp
-	;now we want to enable int0 and int1
+	ldi temp, (1 << ISC11) | (1 << ISC01)			; Interrupt 0 and Interrupt 1 will trigger on falling edges external interrupt
+	sts EICRA, temp									; setting the external control to trigger for INT0 and INT1 (EICRA handles INT0 - INT3)
+	; now we want to enable int0 and int1
 	in temp, EIMSK
 	ori temp, (1 <<INT0) | (1 << INT1)
 	out EIMSK, temp
-	ldi temp, 1
+	; now we want to setup Timer 0
+	ldi temp, 1	
 	ldi temp, 0b00000000
 	out TCCR0A, temp
 	ldi temp, 0b00000100
-	out TCCR0B, temp				; prescalining = 8
-	ldi temp, 1<<TOIE0				; 128 microseconds
-	sts TIMSK0, temp				; T/C0 interrupt enable
-	sei
-	//start on floor 0 for the floor (if user presses 0, 1||1 = 1) so starting on 0
-	ldi temp, 0
-	sts lastPressed, temp
+	out TCCR0B, temp								; prescalining = 8
+	ldi temp, 1<<TOIE0								; 128 microseconds
+	sts TIMSK0, temp								; T/C0 interrupt enable
+	sei												; enable interrupts
+	; initialising the elevator Queue and starting floor
+	ldi temp, 0	
+	sts lastPressed, temp							; Debouncing for KeyPad
+	; clear the queue and initialise floor to be 0
 	clear floor_Queue
 	clear strobeTimer
 	ldi temp, 0
 	sts currentFloor, temp
+	; initialising emergency to be off
 	sts emergency, temp
 	sts emergencyshown, temp
+	; display on LCD 
 	initalise_LCD
-
-	;setup strobe light + motor
-		;this is PE2 because from some reason its PE4???????????????????????????
+	; setup motor for output and LCD backlight and LCD Display for output 
 	ldi temp1, 0xff
-	;motor + strobe as output
-	out DDRE, temp1
-	;show the red LED
+	out DDRE, temp1									; put port E to be output
+	; set backlight for lcd 
 	ldi temp1, 0xFF
 	out portE, temp1
-	out DDRC, temp1
-	ldi temp1, 0
-	;initialise voltage to max
-	sts OCR3BL, temp1
-	sts OCR3BH, temp1
-	ldi temp1, (1 << CS30) 		; set the Timer3 to Phase Correct PWM mode. 
+	ldi temp1, 0									; motor is intiailly OFF
+	sts OCR3BL, temp1								; low of voltage supplied to motor -> 0
+	sts OCR3BH, temp1								; high of voltage supplied to motor -> 0
+	ldi temp1, (1 << CS30) 							; set the Timer3 to Phase Correct PWM mode
 	sts TCCR3B, temp1
 	ldi temp1, (1<< WGM30)|(1<<COM3B1)
 	sts TCCR3A, temp1
 	jmp main
-
-;scans through the rows n columns
-;if no key is pressed i.e full scan debounce value = 0 means last press = 0, aka no inputs
-;if a convert is performed i.e detection will set debounce flag which means key pressed so flag for ispressed is set
-;since it jumps to main instead of the held down which resets the debounce flag, it means that the flag is never reset
-;this is because it will continously detect input there from the user
-;so until a full scan is done where nothing is detected (letting go of the key scanning through all columns false)
-;it will not reset flag i.e will not take new input till user lifts finger
-;when lifts finger, scans through fully and resets the flag 
-;debounce timer of 15ms to make sure multiple inputs arent proccessed and pull up resistors are set with the delay
+; scans through the rows and columns
+; if no key is pressed i.e full scan debounce value = 0 means last press = 0, aka no inputs
+; if a convert is performed i.e detection will set debounce flag which means key pressed so flag for ispressed is set
+; since it jumps to main instead of the held down which resets the debounce flag, it means that the flag is never reset
+; this is because it will continously detect input there from the user because the PIN value will not be 0 
+; so until a full scan is done where nothing is detected (letting go of the key scanning through all columns false)
+; it will not reset flag i.e will not take new input till user lifts finger
+; when lifts finger, scans through fully and resets the flag 
+; debounce timer of 15ms to make sure multiple inputs arent proccessed and pull up resistors are set with the delay
 heldDown:
 	ldi temp1, 0
-	sts debounceValue, temp1
-	
+	sts debounceValue, temp1						; reset the secondary debounce flag
 main:
-	ldi cmask, INITCOLMASK				; initial column mask
-	clr col								; initial column index = 0
+	ldi cmask, INITCOLMASK							; initial column mask
+	clr col											; initial column index = 0
 
 colloop:
 	cpi col, 4
-	breq heldDown							; If all columns are scanned, go back to main.    
-	//PORT H -> L CAN ONLY USE STS AND LDS DO NOT SUPPORT OUT AND IN
-	sts PORTL, cmask					; Otherwise, scan the next column.
-	ldi temp1, 0xFF						; Slowing down the scan operation.
-
-delay:	
-										; debouncer for key scan
-	dec temp1							; will be set up as pull-up resistors
+	breq heldDown									; If all columns are scanned unsuccessfully -> no input -> reset debounce value  
+	; PORT H -> L CAN ONLY USE STS AND LDS DO NOT SUPPORT OUT AND IN
+	sts PORTL, cmask								; Otherwise, scan the next column.
+	ldi temp1, 0xFF									; Slowing down the scan operation.
+delay:
+	dec temp1										; will be set up as pull-up resistors
 	brne delay
-	call sleep_1ms						; debouncing 50ms
-	lds temp1, debouncevalue
+	call sleep_1ms	
+	lds temp1, debouncevalue						; if the debounce value is not set means no key was pressed skip 
 	cpi temp1, 0
 	breq skip
-	ldi temp1, 1
+	ldi temp1, 1									; load value 1 into last pressed the primary debounce flag 
 	sts lastPressed, temp1
 	jmp skip2
 
 skip:
 	ldi temp1, 0
-	sts lastPressed, temp1
+	sts lastPressed, temp1							; otherwise no key pressed -> load 0 into the debounce flag
 
 
 skip2:
-	//we want to load our current cmask (column index) into temp1
-	//then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low
-	//if we and them together, and get 0xf, that means we have no low rows (so we want to go to next column)
-	//since 0x1111 means all row are high but any other result would be low eg 0x0001 -> row 0 or row 3 is low (depends on bit mantisa)
-	lds temp1, PINL						; Read PORTL
-	andi temp1, ROWMASK					; Get the keypad output value
-	cpi temp1, 0xF						; Check if any row is low
-	breq nextcol						//if no rows are low i.e all 1111 for the rows we wana ignore dat shit NEXTT
-	; If yes, find which row is low
-	ldi rmask, INITROWMASK				; Initialize for row check
+	; we want to load our current cmask (column index) into temp1
+	; then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low (low means pressed)
+	; if we and them together, and get 0xf, that means we have no rows input (so we want to go to next column)
+	lds temp1, PINL									; Read PORTL where keypad is connected to
+	andi temp1, ROWMASK								; Get the keypad output value
+	cpi temp1, 0xF									; Check if any row is low
+	breq nextcol									; if no rows are low i.e all 1111 for the rows we want to go to next column
+	; if a row is low means there was input
+	ldi rmask, INITROWMASK							; Initialize for row check
 	clr row  
 
 rowloop:
-	cpi row, 4							; if all the rows are scanned we want to go to the next column since no more rows to check in that column
-	breq nextcol						; NEXT COLUMN.
+	cpi row, 4										; if all the rows are scanned we want to go to the next column since no more rows to check in that column
+	breq nextcol
 
 	; now we are checking if the key in the column and row index has been pressed
 	; temp1 will have our low rows from previous and. if we and the low rows with the rowmask we currently have
@@ -420,7 +394,7 @@ star:
 	ldi temp, 0
 	out portC, temp
 	jmp main
-	emergency_ON:
+emergency_ON:
 	;want to set emergency flag on
 	ldi temp, 1
 	sts emergency, temp
@@ -428,7 +402,7 @@ star:
 	cpi temp, 0
 	breq nothingToRemove
 	rcall forceClose
-	nothingToRemove:
+nothingToRemove:
 	ldi temp, 0
 	sts floor_Queue, temp
 	sts floor_Queue + 1, temp
@@ -444,15 +418,11 @@ star:
 	sts floor_Queue, ZL
 	sts floor_Queue+1,ZH
 	jmp main
-
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//																																						 //
-//													These are Helper Functions																			 //
-//																																						 //
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
+//////////////////////////////////////
+//									//
+//	  Interrupt Handlers + LCD	    //
+//									//
+//////////////////////////////////////
 .equ LCD_RS = 7
 .equ LCD_E = 6
 .equ LCD_RW = 5
@@ -662,22 +632,22 @@ isSecond:
 	cpi temp, 1
 	breq showEmergency2
 	jmp skipEmergencyDisplay
-	showEmergency2:
-		PRINT_EMERGENCY
-		lds temp, emergency
-		cpi temp, 0
-		breq reset_emergency
-		jmp afterprint
-		reset_emergency:
-			ldi temp, 0
-			sts emergencyShown, temp
-		jmp afterPrint
-	skipEmergencyDisplay:
+showEmergency2:
+	PRINT_EMERGENCY
+	lds temp, emergency
+	cpi temp, 0
+	breq reset_emergency
+	jmp afterprint
+reset_emergency:
+	ldi temp, 0
+	sts emergencyShown, temp
+	jmp afterPrint
+skipEmergencyDisplay:
 	lds temp, currentFloor
 	sts currentFloor, temp
 	PRINT_FLOOR temp
 	;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
-	AfterPrint:
+AfterPrint:
 	lds r24, floor_queue
 	lds r25, floor_queue+1		;checking if the queue is empty
 	cpi r24, 0
@@ -685,7 +655,7 @@ isSecond:
 	cpi r25, 0
 	brne somethinginQueue			;if nothing is in the queue we just want to return!
 	jmp nothinginQueue
-	somethinginQueue:
+somethinginQueue:
 	;otherwise we want to check the current queue and see which direction we are travelling in
 	;if there is stuff on the queue now we want to know which direction the lift will travel in
 	;we want to compare the CURRENT FLOOR to the queue in a way to check if it is moving up or down with the current 
@@ -710,7 +680,7 @@ isSecond:
 	brne checkk
 	rcall open_door
 	jmp TimerEpilogue
-	checkk:
+checkk:
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
@@ -727,7 +697,7 @@ isSecond:
 	breq checkk2
 	rcall open_door
 	jmp TimerEpilogue
-	checkk2:
+checkk2:
 	lds temp, currentFloor
 	;now we want to convert current floor into bit representation
 	ldi XL, 1
@@ -757,7 +727,7 @@ isSecond:
 	;if its = 0 that means direction is up as there are no lower floors
 	brne anotherSkip
 	jmp moveUp
-	anotherSkip:
+anotherSkip:
 	jmp continue
 
 moveDown:
@@ -802,13 +772,13 @@ continueDown:
 	breq ignoredown
 	;in here we will update the queue by removing the current floor
 	rcall OPEN_DOOR
-	ignoredown:
+ignoredown:
 	;after regardless of return we sleep for 2s
 	lds temp, secondCounter
 	cpi temp, 2
 	breq anotherskipp
 	jmp timerEpilogue
-	anotherskipp:
+anotherskipp:
 	ldi temp, 0
 	sts secondCounter, temp
 	lds temp, currentFloor
@@ -819,7 +789,7 @@ continueDown:
 continueUp:
 	ldi temp1, MOVING_UP
 	out portC, temp1
-;move up the floors checking if a floor is in the queue
+	;move up the floors checking if a floor is in the queue
 	;first check if the CURRENT FLOOR IS ON QUEUE
 	;IF IT IS call the open door function
 	;return from open if called
@@ -841,14 +811,14 @@ continueUp:
 	breq ignoreup
 	;in here we will update the queue by removing the current floor
 	rcall OPEN_DOOR
-	ignoreup:
+ignoreup:
 	;after regardless of return we sleep for 2s
 	;after regardless of return we sleep for 2s
 	lds temp, secondCounter
 	cpi temp, 2
 	breq anotherskippr
 	jmp timerEpilogue
-	anotherskippr:
+anotherskippr:
 	ldi temp, 0
 	sts secondCounter, temp
 	lds temp, currentFloor	
@@ -1016,8 +986,7 @@ showDisplay:
 	PRINT_EMERGENCY
 	epilogue
 	ret
-	skipDisplay:
-
+skipDisplay:
 	epilogue
 	ret
 
