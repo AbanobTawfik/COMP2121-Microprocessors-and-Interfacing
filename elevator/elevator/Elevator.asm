@@ -12,25 +12,25 @@
 .endmacro
 ; macro will be for initial loading of LCD
 .macro initalise_LCD
-     do_lcd_command 0b00111000                        ; 2x5x7
+    do_lcd_command 0b00111000                        ; 2x5x7
     rcall sleep_5ms
-     do_lcd_command 0b00111000                        ; 2x5x7
+    do_lcd_command 0b00111000                        ; 2x5x7
     rcall sleep_1ms
-     do_lcd_command 0b00111000                        ; 2x5x7
-     do_lcd_command 0b00111000                        ; 2x5x7
-     do_lcd_command 0b00001000                        ; display off?
-     do_lcd_command 0b00000001                        ; clear display
-     do_lcd_command 0b00000110                        ; increment, no display shift
-     do_lcd_command 0b00001110                        ; Cursor on, bar, no blink
-     do_lcd_data ' '
-     do_lcd_data ' '
-     do_lcd_data ' '
-     do_lcd_data ' '
-     do_lcd_data ' '
-     do_lcd_data 'L'
-     do_lcd_data 'i'
-     do_lcd_data 'f'
-     do_lcd_data 't'
+    do_lcd_command 0b00111000                        ; 2x5x7
+    do_lcd_command 0b00111000                        ; 2x5x7
+    do_lcd_command 0b00001000                        ; display off?
+    do_lcd_command 0b00000001                        ; clear display
+    do_lcd_command 0b00000110                        ; increment, no display shift
+    do_lcd_command 0b00001110                        ; Cursor on, bar, no blink
+    do_lcd_data ' '
+    do_lcd_data ' '
+    do_lcd_data ' '
+    do_lcd_data ' '
+    do_lcd_data ' '
+    do_lcd_data 'L'
+    do_lcd_data 'i'
+    do_lcd_data 'f'
+    do_lcd_data 't'
     do_lcd_command 0b0011000000                       ; address of second line on lcd
     do_lcd_data 'f'
     do_lcd_data 'l'
@@ -59,7 +59,7 @@
      do_lcd_data 'f'
      do_lcd_data 'l'
      do_lcd_data 'o'
-      do_lcd_data 'o'
+     do_lcd_data 'o'
      do_lcd_data 'r'
      do_lcd_data ':'
      do_lcd_data ' '
@@ -256,7 +256,6 @@ heldDown:
 main:
     ldi cmask, INITCOLMASK                            ; initial column mask
     clr col                                           ; initial column index = 0
-
 colloop:
     cpi col, 4
     breq heldDown                                     ; If all columns are scanned unsuccessfully -> no input -> reset debounce value  
@@ -273,12 +272,9 @@ delay:
     ldi temp1, 1                                      ; load value 1 into last pressed the primary debounce flag 
     sts lastPressed, temp1
     jmp skip2
-
 skip:
     ldi temp1, 0
     sts lastPressed, temp1                            ; otherwise no key pressed -> load 0 into the debounce flag
-
-
 skip2:
     ; we want to load our current cmask (column index) into temp1
     ; then we want to and it with the ROWMASK 0x0F to check if any rows in the column are low (low means pressed)
@@ -290,114 +286,98 @@ skip2:
     ; if a row is low means there was input
     ldi rmask, INITROWMASK                            ; Initialize for row check
     clr row  
-
 rowloop:
     cpi row, 4                                        ; if all the rows are scanned we want to go to the next column since no more rows to check in that column
     breq nextcol
-
     ; now we are checking if the key in the column and row index has been pressed
     ; temp1 will have our low rows from previous and. if we and the low rows with the rowmask we currently have
     ; if result = 0 -> we have a low row key pressed -> convert
     ; otherwise we want to keep scanning through the rows
     mov temp2, temp1
-    and temp2, rmask                                  ; check un-masked bit (i.e the row column index is LOW -> KEY PRESSED DING DING DING)
+    and temp2, rmask                                  ; check un-masked bit (i.e the row column index is LOW -> KEY PRESSED)
     breq convert                                      ; if bit is clear, the key is pressed
-
     inc row                                           ; else move to the next row (keep scanning)
     lsl rmask                                         ; want to increment the row to scan
     jmp rowloop
-
-nextcol:                                              ; if row scan is over
-
+; incrementing the current column to scan
+nextcol:                                   
     lsl cmask                                         ; left shit the column mask
     inc col                                           ; increase column value
-
     jmp colloop                                       ; go to the next column
-
 convert:
-    ldi temp1, 1
+    ldi temp1, 1                                      ; if a key was scanned we want to store 1 into the debounce secondary flag
     sts debounceValue, temp1
-
-    lds temp1, lastPressed
+    lds temp1, lastPressed                            ; check if the primary debounce flag is = 0
     cpi temp1, 0
-    brne mainjmp
-
-
+    brne mainjmp                                      ; return to main if primary debounce is not = 0 
     cpi col, 3                                        ; If the pressed key is in col.3 (column 3 has the letters)
     breq mainjmp                                      ; we have a letter DO NOT HANDLE -> MAIN
-    ; If the key is not in col.3 and
-    cpi row, 3                                        ; If the key is in row3, (row 3 -> symbols)
-    breq symboljmp                                    ; we have a symbol or 0
-
+    ; If the key is not in col3 and
+    cpi row, 3                                        ; If the key is in row3, (row 3 -> symbols) bottom row of keypad
+    breq symboljmp                                    ; we have a star or 0
     mov temp1, row                                    ; Otherwise we have a number in 1-9
     lsl temp1                                         ; this will multiply temp1 by 2 
     add temp1, row                                    ; now we have 2temp1 + temp 1 = 3temp1
     add temp1, col                                    ; temp1 = row*3 + col
     subi temp1, -1                                    ; Add the value of  ‘1’ since we aren't starting at 0
-    jmp addToQueue
-
-mainjmp:
+    jmp addToQueue                                    ; now we want to add the floor to the queue
+mainjmp:                                              ; only way to avoid the relative branch out of reach
     jmp main
-
 symboljmp:
     jmp symbols
-
-
 symbols:
-    cpi col, 0                                ; Check if we have a star
-    breq starjmp                            ; if so do not handle -> MAIN
-    cpi col, 1
-    breq zerojmp
-    jmp main                                ; otherwise so we do not handle -> MAIN
-
-starjmp:
+    cpi col, 0                                        ; Check if we have a star
+    breq starjmp                                      ; if so do jump to star handler
+    cpi col, 1                                        ; now check if we have a zero which is a unique case
+    breq zerojmp                                      ; if it is we store 0 onto the queue
+    jmp main                                          ; otherwise so we do not handle -> MAIN
+; avoiding relative branch errors
+starjmp:                  
     jmp star
 zerojmp:
     jmp zero
+; this will be used to add floors to the elevator Queue
 addToQueue:
-    lds temp, emergency
-    cpi temp, 1
+    lds temp, emergency                               ; if the emergency flag is on
+    cpi temp, 1                                       ; we want to return to main as we don't handle requests on emergency
     brne justAdd
     jmp main
+; otherwise we add it to the queue again more labels to avoid relative branch out of reach error
 justAdd:
-    ldi XL, 1
+    ldi XL, 1                                         ; we want to load into a register pair 0b0000000000000001
     ldi XH, 0 
-
-    CONVERT_FLOOR_INTEGER temp1, XL, XH
-
-    
-    lds ZL, floor_Queue
+    CONVERT_FLOOR_INTEGER temp1, XL, XH               ; now we want to convert the floor into a bit representation
+	                                                  ; this is done by left shifting and rotating that floor number amount of times
+    lds ZL, floor_Queue                               ; now we want to load the current Queue into a register pair  
     lds ZH, floor_Queue + 1    
-
-
-    UPDATE_STATE_ADD ZL,XL,ZH,XH
-    sts floor_Queue, ZL
+    UPDATE_STATE_ADD ZL,XL,ZH,XH                      ; now we want to add the scanned floor by orring the bit representation with the queue 
+    sts floor_Queue, ZL                               ; update the queue in memory
     sts floor_Queue+1,ZH
-    ;out portC, Z
-    jmp main
-
-zero:
-    ldi temp1, 0
+    jmp main                                          ; return to main to repeat the sequence
+; in the case of zero we want to directly store floor 0 onto the queue
+zero:                                                 
+    ldi temp1, 0                                      ; set scanned floor to be = 0 and add it to the queue
     jmp addtoQueue
-
+; in the case the emergency was pressed we want to begin the emergency protocol
 star:
-    ;resetting the lcd
-    ;initalising the output in lcd 
+    ; first we want to check if the flag is set on/off to know how to toggle
     lds temp, emergency
     cpi temp, 0
-    breq emergency_ON
-    ;emergency off
-    ldi temp, 0
+    breq emergency_ON                                 ; if the current emergency flag is off we want to set it to be ON jump to that procedure
+    ; otherwise we want to turn emergency off
+    ldi temp, 0                                       ; store 0 into the emergency flag
     sts emergency, temp
-    ldi temp, 0b00000000
+    ldi temp, 0b00000000                              ; store 0 into the strobe light output to make sure it is off
     out portA, temp
-    ldi temp, 0
+    ldi temp, 0                                       ; reset the LED state to show elevator is now taking requests
     out portC, temp
-    jmp main
+    jmp main                                          ; return to main
+; procedure for toggling emergency on
 emergency_ON:
-    ;want to set emergency flag on
+    ; want to set emergency flag
     ldi temp, 1
     sts emergency, temp
+	; now we want to check if the door is currently closing
     lds temp, canClose
     cpi temp, 0
     breq nothingToRemove
@@ -419,9 +399,9 @@ nothingToRemove:
     sts floor_Queue+1,ZH
     jmp main
 //////////////////////////////////////
-//                                    //
-//      Interrupt Handlers + LCD        //
-//                                    //
+//                                  //
+//      Interrupt Handlers + LCD    //
+//                                  //
 //////////////////////////////////////
 .equ LCD_RS = 7
 .equ LCD_E = 6
@@ -531,11 +511,11 @@ sleep_1s:
     rcall sleep_100ms
     ret
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//                                                                                                                                                         //
-//                                                    These are interrupt handlers                                                                         //
-//                                                                                                                                                         //
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////
+//                                      //
+//    These are interrupt handlers      //
+//                                      //
+//////////////////////////////////////////
 
 DEFAULT:    
     
@@ -894,7 +874,7 @@ startclosingcheck:
     breq stayopen
     jmp startClosing
 stayopen:
-    ldi temp, 8
+    ldi temp, 7
     sts secondCounter, temp
     jmp TimerEpilogue
 startClosing:
