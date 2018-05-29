@@ -62,11 +62,11 @@
 ////////////////////////////////////////////////
 
 
-;a full queue would look like
-;full queue with floors 0-9 
-;0b (high bits) 0000011 (low bits) 11111111
-;this macro converts level into bits eg if floor is 6
-;converts 6 into 0b 00000000 01000000
+; a full queue would look like
+; full queue with floors 0-9 
+; 0b (high bits) 0000011 (low bits) 11111111
+; this macro converts level into bits eg if floor is 6
+; converts 6 into 0b 00000000 01000000
 .macro CONVERT_FLOOR_INTEGER
 	push temp
 	mov temp, @0
