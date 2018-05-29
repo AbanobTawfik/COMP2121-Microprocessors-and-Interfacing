@@ -520,161 +520,158 @@ sleep_1s:
 //                                      //
 //////////////////////////////////////////
 
+; close button
 PB1_ON_PRESS:
-;  PROLOGUE
     prologue     
-    lds temp, canClose
+    lds temp, canClose                                ; If the elevator cannot close (door not open)
     cpi temp, 0
-    breq pb1Epilogue
-    ldi temp, 1
-    sts closing, temp
-
-    ;this button will enter 1 so we load our pattern << to move the bit up (aka multiply by 2) and then add  1 to the end 
-
+    breq pb1Epilogue                                  ; return do nothing
+    ldi temp, 1                                       ; otherwise set the flag to close
+    sts closing, temp                                 
 pb1Epilogue:
-    ;epilogue
     epilogue
-    reti    
+    reti 
+; open button for when door is closing, when held down we will check pinD itself
 PB0_ON_PRESS:
-;  PROLOGUE
     prologue
-    lds temp, canOpen
+    lds temp, canOpen                                 ; if the elevator (door) is not closing
     cpi temp, 0
-    breq pb0Epilogue
+    breq pb0Epilogue                                  ; return do nothing
     ldi temp, 1
-    sts opening, temp
-
+    sts opening, temp                                 ; othweise we set the flag to reopen
 pb0Epilogue:
-    ;epilogue
     epilogue
     reti    
-
+; this interrupt handler will be the main handler for all lift movement and stops etc.
 Timer0OVF:
-;storing onto the stack the values we want to preserve and conflict registers
-;  PROLOGUE
     prologue
-    ;button debouncing ~100 ms since 7812 = 1 second, 25 ms = 7812/1000 * 100 
-;if the buttons status is on we want to start counter to reset it
-    lds temp, emergency
+    lds temp, emergency                               ; if the emergency is on we want to go to strobe pattern 
     cpi temp, 1
     breq strobePattern
-    jmp strobeSkip
+    jmp strobeSkip                                    ; otherwise skip strobe light display
 strobePattern:
     lds r26, strobeTimer
     lds r27, strobeTimer+1
     adiw r27:r26, 1
-    cpi r26, low(100)   ;on off ever 1/4s
+    cpi r26, low(100)                                 ; every 1/4s we want to toggle the strobe light
     ldi temp, high(100)
     cpc temp, r27
-    brne strobeSkip                ;after debouncy has been set to enable debounce statuses
-    ;now we want to load the value of temporary counter into the register pair r25/r24
-    
-    lds temp, strobeOn
+    brne strobeSkip
+    lds temp, strobeOn                                ; if the strobe is off 
     cpi temp, 0
-    breq showStrobe
-    jmp offStrobe
+    breq showStrobe                                   ; we want to turn it ON
+    jmp offStrobe                                     ; otherwise turn the strobe off
 showStrobe:
-    ldi temp, 0b00000010
-    out portA, temp
-    ldi temp, 1
-    sts strobeOn, temp
+    ldi temp, 0b00000010                              ; this is the correct pin address in port A for only the strobe light
+    out portA, temp                                   ; out to portA the strobe light ON
+    ldi temp, 1                                       
+    sts strobeOn, temp                                ; set flag on for the strobe light
     jmp finishStrobe
 offStrobe:
-    ldi temp, 0b00000000
-    out portA, temp
+    ldi temp, 0b00000000                              ; load 0 into port A 
+    out portA, temp                                   ; turns off the strobe light
     ldi temp, 0
-    sts strobeOn, temp
+    sts strobeOn, temp                                ; set flag off for the strobe light
 finishStrobe:
-    clear strobeTimer
+    clear strobeTimer                                 ; reset the strobe timer
     clr r26
     clr r27
-
 strobeSkip:
-    sts strobeTimer, r26        ;update the value of the temporary counter
+    sts strobeTimer, r26                              ; update the value of the strobe timer if the 100 hasn't been mett
     sts strobeTimer+1, r27
     lds r24, tempCounter
-    lds r25, tempCounter+1
-    adiw r25:r24, 1            ;increment the register pair
-    cpi r24, low(7812)        ;check if the register pair (r25:r24) = 7812
+    lds r25, tempCounter+1                            ; load the value of the timer
+    adiw r25:r24, 1                                   ; increment the register pair
+    cpi r24, low(7812)                                ; check if the register pair (r25:r24) = 7812 -> 1 second
     ldi temp, high(7812)
     cpc r25, temp
-    breq isSecond            ;if the register pair are not 7812, a second hasnt passed so we jump to NotSecond which will increase counter by 1
-    jmp notSecond
+    breq isSecond                                     ; if the register pair are 7812, we want to go to the protocol if a second has passed
+    jmp notSecond                                     ; otherwise we want to update the timer counter and return
 isSecond:
     clear tempCounter
     ldi r24, 0
-    sts tempCounter, r24
+    sts tempCounter, r24                              ; reset timer counter
     sts tempCounter+1, r24
     lds temp1, secondCounter
-    inc temp1                    ;increment the amount of seconds passed
+    inc temp1                                         ; increment the amount of seconds passed
     sts secondCounter, temp1
-    lds temp, emergencyshown
+    lds temp, emergencyshown                          ; if the emergency has been shown we want to display the emergency
     cpi temp, 1
     breq showEmergency2
-    jmp skipEmergencyDisplay
+    jmp skipEmergencyDisplay                          ; otherwise continue normal procedure
 showEmergency2:
-    PRINT_EMERGENCY
-    lds temp, emergency
+    PRINT_EMERGENCY                                   ; display emergency message on LCD
+    lds temp, emergency                               ; now we want to check if the emergency button has pressed off
     cpi temp, 0
-    breq reset_emergency
-    jmp afterprint
+    breq reset_emergency                              ; if so we want to turn off the emergency shown flag and resume normal procedure
+    jmp afterprint                                    ; otherwise skip over and resume (since queue empty it will just reti)
 reset_emergency:
     ldi temp, 0
-    sts emergencyShown, temp
+    sts emergencyShown, temp                          ; resets the emergency shown flag
     jmp afterPrint
 skipEmergencyDisplay:
     lds temp, currentFloor
     sts currentFloor, temp
     PRINT_FLOOR temp
-    ;now we want our elevator to move if there is stuff in queue, if not we just want to exit so
+    ; now we want our elevator to move if there is stuff in queue, if not we just want to exit so
 AfterPrint:
     lds r24, floor_queue
-    lds r25, floor_queue+1        ;checking if the queue is empty
+    lds r25, floor_queue+1                            ; checking if the either half queue has something because if any half has something there is something in queue
     cpi r24, 0
-    brne somethinginQueue
+    brne somethinginQueue                             ; if lower part of queue is not empty -> we want to move to our protocol
     cpi r25, 0
-    brne somethinginQueue            ;if nothing is in the queue we just want to return!
-    jmp nothinginQueue
+    brne somethinginQueue                             ; if higher part of queue is not empty -> we want to move our protocol
+    jmp nothinginQueue                                ; otherwise we want to jump to our handler for nothing in queue
 somethinginQueue:
-    ;otherwise we want to check the current queue and see which direction we are travelling in
-    ;if there is stuff on the queue now we want to know which direction the lift will travel in
-    ;we want to compare the CURRENT FLOOR to the queue in a way to check if it is moving up or down with the current 
-    ;the movement of the elevator is simple
-    ;it will move up all the way till it reaches the top floor
-    ;then move down all the way till it reaches thw lowest floor, taking floors off the queue on its way
-    ;to check if we are at the top, we can simply just check if the current floor in bits
-    ;is higher than the entire queue, since 0b11111110 < 0b00000001
-    ;now to check if we are at the bottom we simply want to subtract 1 from the queue
-    ;and AND, if the result is = 0 -> no floors below move up
-    ;otherwise continue in direction
-    lds temp, currentFloor
-    ;now we want to convert current floor into bit representation
+    ; if there is stuff on the queue now we want to know which direction the lift will travel in
+    ; we want to compare the CURRENT FLOOR to the queue in a way to check if it has reached the highest/lowest floor
+    ; the movement of the elevator is simple
+    ; it will move up all the way till it reaches the top floor
+
+    ; then move down all the way till it reaches thw lowest floor, taking floors off the queue on its way
+    ; i was inspired to do this by attempting my java implementation where i had a queue of booleans size 9
+	; and each index showed a floor, and i would check if the current floor is the maximum floor and continue up
+	; and check if current floor is min floor and continue down
+	; to check if we are at the max floor, we can simply just check if the current floor in bits is higher than all the other floors
+	; if there is a floor above, the queue will have a higher value
+	; if we are on floor 3 and our queue is floor 1 2 3 -> 0b111
+	; since floor 3 has value 8 and floor 1 and 2 together have value 7
+	; floor 3 is higher than the remaining queue itself 
+	; so we will set the direction to move down
+    ; 0b01111111 < 0b10000000
+
+	; to check if we are at the minimum floor we want to check if there are any floors below the current floor
+    ; to do this we can subtract 1 from the current floor so if we are on floor 3 0b100 -> 0b011
+	; then we check if there are any floors in 0b110 by anding the queue with the 0b011
+	; if the result is 0 that means there are no lower floors
+	; if floor 1 was still in the queue our result would be 0b001 not 0 so that means there is a lower floor
+	; we will continue in one direction until either of these conditions are met which will swap the directions
+
+    lds temp, currentFloor                            ; now we want to convert current floor into bit representation
     ldi XL, 1
     ldi XH, 0 
-    CONVERT_FLOOR_INTEGER temp, XL, XH
-    ;queue is in r24:r25 we want a copy of it for our subtraction
+    CONVERT_FLOOR_INTEGER temp, XL, XH                ; using our macro to convert the floor into bit and store into XL:XH
     lds temp1, floor_Queue
-    lds temp2, floor_Queue + 1
+    lds temp2, floor_Queue + 1                        ; load the current queue into temp1:temp2
     cp temp1, XL
-    cpc temp2, XH
-    brne checkk
-    rcall open_door
-    jmp TimerEpilogue
+    cpc temp2, XH                                     ; now we want to compare the current floor to the Queue  
+    brne checkk                                       ; if the current floor is not equal to the queue we go to the check mentioned above
+    rcall open_door                                   ; otherwise open the door since the queue == current floor 
+    jmp TimerEpilogue                                 ; return from interrupt
+; main check mentioned above
 checkk:
-    lds temp, currentFloor
-    ;now we want to convert current floor into bit representation
+    lds temp, currentFloor                            ; converting current floor into bit representation
     ldi XL, 1
     ldi XH, 0 
     CONVERT_FLOOR_INTEGER temp, XL, XH
-    ;queue is in r24:r25 we want a copy of it for our subtraction
     lds temp1, floor_Queue
-    lds temp2, floor_Queue + 1
+    lds temp2, floor_Queue + 1                        ; load the floor queue into temp1:temp2    
     and temp1, XL
-    and temp2, XH
-    cpi temp1, 0
+    and temp2, XH                                     ; now we want to and the queue with the current floor
+    cpi temp1, 0                                      ; compare the result to 0
     ldi temp, 0
     cpc temp2, temp
-    breq checkk2
+    breq checkk2                                      ; if the result is 0 that means     
     rcall open_door
     jmp TimerEpilogue
 checkk2:
