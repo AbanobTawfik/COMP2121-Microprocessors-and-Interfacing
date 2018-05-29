@@ -377,27 +377,29 @@ emergency_ON:
     ; want to set emergency flag
     ldi temp, 1
     sts emergency, temp
-	; now we want to check if the door is currently closing
+	; now we want to check if the door is currently open 
     lds temp, canClose
     cpi temp, 0
-    breq nothingToRemove
-    rcall forceClose
+    breq nothingToRemove                              ; if the door is OPEN it canClose -> FORCE IT CLOSED  
+    rcall forceClose                                  ; this will force the door to shut
 nothingToRemove:
-    ldi temp, 0
+	; forcing motor off regardless incase door is opening causes a weird bug
+    ldi temp1, 0
+    sts OCR3BL, temp1
+    sts OCR3BH, temp1
+    ldi temp, 0                                       ; clearing the current Queue
     sts floor_Queue, temp
-    sts floor_Queue + 1, temp
-    ;clear queue and go to floor 0
-    ldi temp, 0
+    sts floor_Queue + 1, temp 
+    ldi temp, 0                                       ; loading floor 0 into Queue to move down to 0 simply
     ldi XL, 1
     ldi XH, 0 
-    CONVERT_FLOOR_INTEGER temp, XL, XH
-    ;queue is in r24:r25 we want a copy of it for our subtraction
-    lds ZL, floor_Queue
-    lds ZH, floor_Queue + 1    
-    UPDATE_STATE_ADD ZL,XL,ZH,XH
-    sts floor_Queue, ZL
+    CONVERT_FLOOR_INTEGER temp, XL, XH                ; converting floor 0 into bit representation
+    lds ZL, floor_Queue                                    
+    lds ZH, floor_Queue + 1                            
+    UPDATE_STATE_ADD ZL,XL,ZH,XH                      ; add floor 0 to the empty Queue 
+    sts floor_Queue, ZL                               ; update the state of the Queue
     sts floor_Queue+1,ZH
-    jmp main
+    jmp main                                          ; return
 //////////////////////////////////////
 //                                  //
 //      Interrupt Handlers + LCD    //
@@ -407,18 +409,13 @@ nothingToRemove:
 .equ LCD_E = 6
 .equ LCD_RW = 5
 .equ LCD_BE = 4
-
 .macro lcd_set
     sbi PORTA, @0
 .endmacro
 .macro lcd_clr
     cbi PORTA, @0
 .endmacro
-
-
-;
 ; Send a command to the LCD (r16)
-;
 lcd_command:
     out PORTF, r16
     rcall sleep_1ms
@@ -427,7 +424,6 @@ lcd_command:
     lcd_clr LCD_E
     rcall sleep_1ms
     ret
-
 lcd_data:
     out PORTF, r16
     lcd_set LCD_RS
@@ -438,7 +434,6 @@ lcd_data:
     rcall sleep_1ms
     lcd_clr LCD_RS
     ret
-
 lcd_wait:
     push r16
     clr r16
@@ -458,11 +453,14 @@ lcd_wait_loop:
     out DDRF, r16
     pop r16
     ret
-
+//////////////////////////////////////
+//                                  //
+//    Hard coded delays (sleep)     //
+//                                  //
+//////////////////////////////////////
 .equ F_CPU = 16000000
 .equ DELAY_1MS = F_CPU / 4 / 1000 - 4
 ; 4 cycles per iteration - setup/call-return overhead
-
 sleep_1ms:
     push r24
     push r25
@@ -474,7 +472,6 @@ delayloop_1ms:
     pop r25
     pop r24
     ret
-
 sleep_5ms:
     rcall sleep_1ms
     rcall sleep_1ms
@@ -482,7 +479,6 @@ sleep_5ms:
     rcall sleep_1ms
     rcall sleep_1ms
     ret
-
 sleep_15ms:
     rcall sleep_5ms
     rcall sleep_5ms
@@ -510,15 +506,11 @@ sleep_1s:
     rcall sleep_100ms
     rcall sleep_100ms
     ret
-
 //////////////////////////////////////////
 //                                      //
 //    These are interrupt handlers      //
 //                                      //
 //////////////////////////////////////////
-
-DEFAULT:    
-    
 
 PB1_ON_PRESS:
 ;  PROLOGUE
