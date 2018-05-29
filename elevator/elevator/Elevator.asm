@@ -899,9 +899,6 @@ OPEN_DOOR:
 	out portC, temp1
 	jmp TimerEpilogue
 skipOpen:
-	ldi temp1, 1
-	sts canOpen, temp1
-
 	ldi temp1, DOOR_OPEN
 	out portC, temp1	
 	ldi temp1, 1
@@ -916,15 +913,29 @@ skipOpen:
 	breq startClosing
 	lds temp, secondCounter
 	cpi temp, 7
-	brsh startClosing
+	brsh startClosingcheck
+	jmp TimerEpilogue
+startclosingcheck:
+	;first we want to check for port D if the button is pushed down (open) if it is we want to not allow it to move on
+	in temp, pinD
+	ldi temp1, 0b0000001
+	and temp1, temp
+	cpi temp1, 0
+	breq stayopen
+	jmp startClosing
+stayopen:
+	ldi temp, 8
+	sts secondCounter, temp
 	jmp TimerEpilogue
 startClosing:
+	ldi temp1, 1
+	sts canOpen, temp1
 	lds temp, opening
 	cpi temp, 1
 	breq startReopening
 	jmp skipReopening
 startReopening:
-	ldi temp, 2
+	ldi temp, 4
 	sts secondCounter, temp
 	ldi temp, 0
 	sts opening, temp
@@ -1044,4 +1055,3 @@ forceClose:
 	sts floor_Queue+1,ZH
 	epilogue
 	ret
-
